@@ -25,6 +25,7 @@
       <span id="rangeAcc">車禍：--</span>
       <span id="rangeDet"></span>
     </div>
+    <button type="button" class="auth__btn top__help" id="helpBtn">使用說明</button>
     <div class="top__auth" id="authBox"></div>
   </header>
 
@@ -144,6 +145,7 @@
     <div class="map-col">
       <div class="map-head">
         <p class="map-hint" id="personaHint"></p>
+        <p class="map-tip" id="mapTip"></p>
         <div class="seg seg--sm" id="accViewSeg" role="group" aria-label="車禍呈現方式">
           <button type="button" data-accview="spot" class="is-on" aria-pressed="true">斑點圖</button>
           <button type="button" data-accview="heat" aria-pressed="false">熱度圖</button>
@@ -152,7 +154,11 @@
       <div class="map-wrap">
         <div id="map"></div>
         <div class="map-msg" id="mapMsg" role="status" aria-live="polite" hidden></div>
-        <div class="map-empty" id="emptyHint" hidden>這個條件下沒有事件</div>
+        <div class="map-empty" id="emptyHint" hidden>
+          <b>這個條件下沒有車禍或偵測紀錄</b>
+          <span id="emptyWhy"></span>
+          <button type="button" class="auth__btn auth__btn--main" id="emptyReset">全部重設</button>
+        </div>
         <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
         <section class="wcard" id="writeCard" aria-live="polite" aria-label="新偵測事件寫入資料庫" hidden></section>
       </div>
@@ -200,6 +206,7 @@
   <section class="admin" id="adminView" hidden aria-label="系統管理"></section>
   <dialog class="login-dialog" id="loginDialog" aria-label="登入"></dialog>
   <dialog class="login-dialog ai-dialog" id="aiDialog" aria-label="AI 轄區分析"></dialog>
+  <dialog class="login-dialog tour-dialog" id="tourDialog" aria-label="使用說明"></dialog>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
@@ -232,6 +239,7 @@
   <script src="js/ui/write-card.js"></script>
   <script src="js/ui/route-panel.js"></script>
   <script src="js/ui/ai-dialog.js"></script>
+  <script src="js/ui/tour.js"></script>
   <script src="js/ui/admin-view.js"></script>
   <script src="js/heatmap.js"></script>
 </body>

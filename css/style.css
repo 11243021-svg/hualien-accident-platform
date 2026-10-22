@@ -454,3 +454,16 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .route__quick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 8px; }
 .route__quick-label { font-size: 0.8rem; color: var(--text-dim); }
 .route__chip { cursor: pointer; }
+
+/* 新手提示 */
+.map-tip { margin: 0; flex: 1 1 100%; order: 3; color: var(--text-dim); font-size: 0.8rem; }
+.top__help { white-space: nowrap; }
+.map-empty { display: grid; gap: 8px; justify-items: center; text-align: center; max-width: min(360px, 90%); }
+.map-empty[hidden] { display: none; }
+.map-empty span { font-size: 0.85rem; color: var(--text-mut); line-height: 1.5; }
+.tour-dialog { width: min(480px, calc(100vw - 32px)); }
+.tour__step { margin: 0; font-size: 0.8rem; color: var(--accent); }
+.tour__list { margin: 4px 0 6px; padding-left: 20px; display: grid; gap: 8px; line-height: 1.7; }
+.tour__skip { margin-right: auto; }
+.map-msg.is-info { color: var(--text); border-color: var(--accent); }
+.map-empty { top: 50%; transform: translate(-50%, -50%); }

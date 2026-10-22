@@ -78,17 +78,19 @@
 
   // 期間文字：「最近 3 年」或「112 年」
   function periodText() {
-    return app.period.kind === "year" ? `${app.period.y - ROC} 年` : `最近 ${app.period.n} 年`;
+    return app.period.kind === "year" ? `${app.period.y - ROC} 年（${app.period.y}）` : `最近 ${app.period.n} 年`;
   }
 
-  function showMapMsg(text) {
+  // info＝一般提示（例：載入中），不用錯誤的紅色
+  function showMapMsg(text, info) {
     $("mapMsg").textContent = text;
+    $("mapMsg").classList.toggle("is-info", !!info);
     $("mapMsg").hidden = false;
     regionMsg = false;
   }
 
-  function showRegionMsg(text) {
-    showMapMsg(text);
+  function showRegionMsg(text, info) {
+    showMapMsg(text, info);
     regionMsg = true;
   }
 
@@ -613,6 +615,9 @@
     document.querySelectorAll("#personaSeg button").forEach((b) => setPressed(b, b.dataset.persona === app.persona));
     $("personaHint").textContent = persona().hint;
     renderTimeFold();
+    $("mapTip").textContent = HOVER
+      ? "小技巧：點地圖上的點看詳細資料；滾輪放大縮小、按住拖曳移動；放大會出現更多監視器。"
+      : "小技巧：點地圖上的點看詳細資料；兩指放大縮小、單指拖曳移動；放大會出現更多監視器。";
     $("yearsBox").hidden = !hasYears();
     $("sourceLine").hidden = app.region !== "hualien";
     document.querySelectorAll("#yearsSeg button").forEach((b) => setPressed(b, app.period.kind === "last" && Number(b.dataset.years) === app.period.n));
@@ -777,7 +782,7 @@
     const acc = data.accidents[app.region] || [];
     if (acc.length) {
       const span = R.dataYears(acc);
-      $("rangeAcc").textContent = `車禍：${REGION_LABEL[app.region]} ${span.start}–${span.end}（${acc.length.toLocaleString()} 筆）`;
+      $("rangeAcc").textContent = `車禍：${REGION_LABEL[app.region]} ${span.start - ROC}–${span.end - ROC} 年（${span.start}–${span.end}，${acc.length.toLocaleString()} 筆）`;
     } else {
       $("rangeAcc").textContent = "車禍：--";
     }
@@ -837,7 +842,16 @@
     renderPanels();
     renderHourChart();
     renderControls();
-    $("emptyHint").hidden = view.acc.length > 0 || view.det.length > 0;
+    const empty = !(view.acc.length > 0 || view.det.length > 0);
+    $("emptyHint").hidden = !empty;
+    if (empty) {
+      const why = [];
+      if (app.query) why.push(`路名「${app.query}」`);
+      if (app.town) why.push(`鄉鎮「${app.town}」`);
+      if (app.time.mode !== "all") why.push(`時段「${timeText()}」`);
+      if (app.period.kind === "year") why.push(`年份「${periodText()}」`);
+      $("emptyWhy").textContent = why.length ? `可能是 ${why.join("、")} 的範圍太小，按下面的按鈕回到一開始的樣子。` : "按下面的按鈕回到一開始的樣子。";
+    }
   }
 
   // ===== 互動 =====
@@ -1054,7 +1068,7 @@
       hideRegionMsg(); // 收掉前一次留下的「載入中…」或失敗訊息
       return true;
     }
-    showRegionMsg("載入中…");
+    showRegionMsg(`${REGION_LABEL[region]}車禍資料載入中…第一次打開大約要 5～10 秒，請稍等`, true);
     try {
       data.accidents[region] = C.annotateAccidents(R.annotateAccidents(await window.HotData.loadAccidents(region), region));
       hideRegionMsg();
@@ -1204,6 +1218,7 @@
       render();
     });
     $("resetBtn").addEventListener("click", resetFilters);
+    $("emptyReset").addEventListener("click", resetFilters);
     $("csvBtn").addEventListener("click", downloadCsv);
     $("aiBtn").addEventListener("click", runAiAnalysis);
     $("timeToggle").addEventListener("click", () => {
@@ -1277,6 +1292,9 @@
   }
 
   async function start() {
+    // 資料還沒下載完前，數字卡先寫「載入中」，不要顯示 0（看起來像壞掉）
+    ["statTotal", "statDeaths", "statInjuries"].forEach((id) => ($(id).textContent = "載入中"));
+    $("rangeAcc").textContent = "車禍：載入中…";
     app.filtersOpen = loadFoldOpen();
     app.accView = loadAccView();
     renderFold(); // 資料載入前就先收好，畫面不會先展開再收起
@@ -1286,6 +1304,7 @@
     bindControls();
     writeCard = UI.writeCard.create($("writeCard"), focusDetection);
     aiDialog = UI.aiDialog.create($("aiDialog"));
+    const tour = UI.tour.create($("tourDialog"), $("helpBtn"));
     routePanel = UI.routePanel.create($("routeBody"), {
       map,
       layer: routeLayer,
@@ -1325,6 +1344,7 @@
       render();
       fitDense();
     }
+    tour.maybeOpen(); // 第一次來：資料載好後跳出使用說明
     const saved = await sessionPromise; // 上次登入還沒登出：直接進該身分的畫面
     if (saved) await setSession(saved);
     window.HotData.subscribeEvents(onNewDetection, applyUpdate);
