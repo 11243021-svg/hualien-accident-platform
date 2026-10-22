@@ -19,27 +19,54 @@
     return b;
   }
 
-  // ctx：{ map, layer, lineOpts（路線畫在哪一層）, accidents(), cameras(), periodLabel(), openCam(cam) }
+  // ctx：{ map, layer, lineOpts（路線畫在哪一層）, accidents()（沿線統計用）, allAccidents()（找門牌用）, cameras(), periodLabel(), openCam(cam) }
   UI.routePanel = {
     create(body, ctx) {
       const R = root.HotRoute;
       const from = input("起點，例：花蓮火車站", "起點");
-      const to = input("終點，例：慈濟大學", "終點");
+      const to = input("終點，例：慈濟大學、中山路100號", "終點");
+      // 打字時跳出常用地點選單（手機也有）
+      const list = UI.el("datalist");
+      list.id = "routePlaces";
+      R.LANDMARKS.forEach((lm) => {
+        const o = UI.el("option");
+        o.value = lm.names[0];
+        list.append(o);
+      });
+      from.setAttribute("list", "routePlaces");
+      to.setAttribute("list", "routePlaces");
       const go = button("查路線", "search__go");
+      const me = button("用我現在的位置當起點");
       const pick = button("在地圖上點選");
       const clear = button("清除");
+      // 常用地點：點一下就填進還空著的那一格
+      let lastField = from;
+      [from, to].forEach((el) => el.addEventListener("focus", () => (lastField = el)));
+      const quick = UI.el("div", "route__quick");
+      quick.append(UI.el("span", "route__quick-label", "常用地點："));
+      R.QUICK_PLACES.forEach((name) => {
+        const b = button(name, "chip route__chip");
+        b.addEventListener("click", () => {
+          const target = !from.value.trim() ? from : !to.value.trim() ? to : lastField;
+          target.value = name;
+          if (target === from) myPos = null;
+          if (from.value.trim() && to.value.trim()) go.click();
+        });
+        quick.append(b);
+      });
       const msg = UI.el("p", "route__msg");
       msg.setAttribute("role", "status");
       const result = UI.el("div", "route__result");
       const row = UI.el("div", "route__btns");
-      row.append(go, pick, clear);
+      row.append(go, me, pick, clear);
       body.replaceChildren(
-        UI.el("p", "search__hint", "輸入起點和終點（地名、地址），或在地圖上依序點兩個點，看看沿路過去哪裡最常出事。"),
-        from, to, row, msg, result,
+        UI.el("p", "search__hint", "輸入起點和終點（地名、地址都可以），或在地圖上依序點兩個點，看看沿路過去哪裡最常出事。"),
+        list, from, to, quick, row, msg, result,
         UI.el("p", "route__note", "依過去車禍紀錄提醒，不是即時路況或導航；路線與地名查詢使用 OpenStreetMap／OSRM 公開服務，偶爾較慢。"),
       );
 
       let picked = []; // 地圖上點的點
+      let myPos = null; // 「用我現在的位置」拿到的座標
       let pickHandler = null;
       let last = null; // 上次查到的路線，篩選條件改變時重算
       const say = (t, err) => {
@@ -56,11 +83,40 @@
         ctx.map.getContainer().classList.remove("is-picking");
       }
 
+      // 找地點：座標 → 常用地點 → 車禍資料裡的門牌／路名 → OpenStreetMap（換幾種說法再試）
       async function locate(text) {
         const m = text.match(COORD_RE);
-        if (m) return { lat: Number(m[1]), lon: Number(m[2]), name: text.trim() };
-        return root.HotData.route.geocode(text);
+        if (m) return { lat: Number(m[1]), lon: Number(m[2]), label: "地圖上點的位置" };
+        const lm = R.findLandmark(text);
+        if (lm) return lm;
+        const addr = R.localAddress(text, ctx.allAccidents());
+        if (addr) return addr;
+        const tries = R.placeVariants(text);
+        for (let i = 0; i < tries.length; i++) {
+          if (i) await sleep(1100); // 地名查詢服務規定一秒最多一次
+          const r = await root.HotData.route.geocode(tries[i]);
+          if (r) return { lat: r.lat, lon: r.lon, label: r.name.split(",").slice(0, 3).join("，") };
+        }
+        return null;
       }
+      const notFound = (text) =>
+        `找不到「${text.trim()}」。可以改按「用我現在的位置當起點」、「在地圖上點選」，或點上面的常用地點。`;
+
+      me.addEventListener("click", () => {
+        if (!navigator.geolocation) return say("這個瀏覽器不能取得位置，請改用「在地圖上點選」", true);
+        say("正在取得你現在的位置…（瀏覽器問你要不要分享位置時，請按「允許」）");
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            myPos = { lat: pos.coords.latitude, lon: pos.coords.longitude, label: "你現在的位置" };
+            from.value = from.value.trim() && R.meansHere(from.value) ? from.value : "我現在的位置";
+            say(to.value.trim() ? "" : "好了！再輸入終點，或點常用地點");
+            if (to.value.trim()) go.click();
+          },
+          () => say("沒辦法取得位置（可能沒有允許分享位置），請改用「在地圖上點選」", true),
+          { enableHighAccuracy: true, timeout: 10000 },
+        );
+      });
+      from.addEventListener("input", () => (myPos = null));
 
       function draw(r) {
         ctx.layer.clearLayers();
@@ -72,6 +128,7 @@
         pin(r.a, "起");
         pin(r.b, "終");
         result.replaceChildren();
+        result.append(UI.el("p", "route__meta", `起點：${r.a.label || "起點"}　→　終點：${r.b.label || "終點"}`));
         result.append(UI.el("p", "route__sum", R.summaryText(h, ctx.periodLabel())));
         result.append(UI.el("p", "route__meta", `開車約 ${r.km} 公里、${r.minutes} 分鐘；紅色＝這條路上車禍特別密集的路段`));
         if (h.top.length) {
@@ -123,15 +180,24 @@
 
       go.addEventListener("click", async () => {
         stopPick();
-        if (!from.value.trim() || !to.value.trim()) return say("請輸入起點和終點，或按「在地圖上點選」", true);
-        say("查詢地點中…");
+        if (!from.value.trim() || !to.value.trim()) return say("請輸入起點和終點，或點常用地點、「在地圖上點選」", true);
+        // 新的查詢先把舊結果收掉，才不會看到上一次的路線
+        ctx.layer.clearLayers();
+        result.replaceChildren();
+        last = null;
+        say("找地點中…");
         go.disabled = true;
         try {
-          const a = await locate(from.value);
-          if (!a) return say(`在花蓮找不到「${from.value.trim()}」，請換個寫法（例：花蓮火車站、中山路 100 號）`, true);
-          await sleep(1100); // 地名查詢服務規定一秒最多一次
+          // 起點寫「我家」「這裡」：改用手機定位（終點不行，因為定位只能拿到「現在」的位置）
+          if (!myPos && R.meansHere(from.value)) {
+            go.disabled = false;
+            return me.click();
+          }
+          if (R.meansHere(to.value)) return say("終點請輸入地名或地址（例：慈濟醫院、中山路100號），或用「在地圖上點選」", true);
+          const a = myPos || (await locate(from.value));
+          if (!a) return say(notFound(from.value), true);
           const b = await locate(to.value);
-          if (!b) return say(`在花蓮找不到「${to.value.trim()}」，請換個寫法`, true);
+          if (!b) return say(notFound(to.value), true);
           await run(a, b);
         } catch (err) {
           say(err.message, true);
@@ -150,6 +216,7 @@
         pickHandler = (e) => {
           const p = { lat: e.latlng.lat, lon: e.latlng.lng };
           picked.push(p);
+          p.label = picked.length ? "地圖上點的終點" : "地圖上點的起點";
           pin(p, picked.length === 1 ? "起" : "終");
           if (picked.length === 1) return say("請在地圖上點終點");
           stopPick();
@@ -166,6 +233,7 @@
         from.value = "";
         to.value = "";
         last = null;
+        myPos = null;
         say("");
       });
       [from, to].forEach((el) => el.addEventListener("keydown", (e) => {

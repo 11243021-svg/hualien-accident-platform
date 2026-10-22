@@ -450,3 +450,7 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
   .fgroup--mfold:not(.is-mopen) > .fgroup__body { display: none; }
   .fgroup--mfold .fgroup__head .fgroup__title { margin: 0; }
 }
+
+.route__quick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 8px; }
+.route__quick-label { font-size: 0.8rem; color: var(--text-dim); }
+.route__chip { cursor: pointer; }

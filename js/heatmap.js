@@ -155,7 +155,11 @@
       const timed = base.filter(inTime);
       compare = app.period.kind === "year" ? R.compareYear(timed, app.period.y, span) : R.comparePrev(timed, app.period.n, span);
     }
-    return { span, acc, det, roads, hourBase: accNoTime, compare };
+    // 路線安全用：不受上方路名搜尋、鄉鎮影響（路線會跨鄉鎮），其他條件（嚴重度、天候、型態、期間、時段）照算
+    const routeBase = accAll.filter((ev) => app.severities.has(ev.severity) &&
+      (!app.weathers.size || app.weathers.has(ev.weatherG)) && (!app.types.size || app.types.has(ev.typeG)));
+    const accRoute = (useYears ? routeBase.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : routeBase).filter(inTime);
+    return { span, acc, det, roads, hourBase: accNoTime, compare, accRoute };
   }
 
   // ===== 地圖 =====
@@ -1286,7 +1290,8 @@
       map,
       layer: routeLayer,
       lineOpts: { pane: "routePane", renderer: L.svg({ pane: "routePane" }) },
-      accidents: () => (view ? view.acc : []),
+      accidents: () => (view ? view.accRoute : []),
+      allAccidents: () => data.accidents.hualien || [],
       cameras: () => CAM.withStats(CAM.ALL, data.detections).filter((c) => c.liveUrl),
       periodLabel: () => (hasYears() ? periodText() : ""),
       openCam: (c) => cameraLayer.open(c),
