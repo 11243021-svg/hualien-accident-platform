@@ -95,6 +95,7 @@
         img.src = stream;
       }
       return {
+        open: openCam,
         update(cams, visible) {
           const sig = visible ? signature(cams) : "";
           if (drawn && drawn.sig === sig && drawn.visible === visible) return;

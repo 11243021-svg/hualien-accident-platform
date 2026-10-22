@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>花蓮縣交通事故通報平台</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -43,9 +46,13 @@
       </div>
     </div>
 
-    <div class="fgroup">
-      <h2 class="fgroup__title">🕒 看什麼時候</h2>
-      <div class="fgroup__body">
+    <div class="fgroup fgroup--mfold" id="timeGroup">
+      <div class="fgroup__head">
+        <h2 class="fgroup__title">🕒 看什麼時候</h2>
+        <span class="fgroup__summary fgroup__msum" id="timeSummary"></span>
+        <button type="button" class="fgroup__toggle fgroup__mtoggle" id="timeToggle" aria-expanded="false" aria-controls="timeBody">展開 ▾</button>
+      </div>
+      <div class="fgroup__body" id="timeBody">
         <div class="fgroup__line" id="yearsBox">
           <div class="seg" id="yearsSeg">
             <button type="button" data-years="1" class="is-on" aria-pressed="true">最近 1 年</button>
@@ -159,6 +166,7 @@
       <div class="panel" id="rankPanel">
         <div class="panel__head">
           <h2>危險路段排行榜</h2>
+          <button type="button" class="panel__btn" id="aiBtn" hidden>AI 分析這個轄區</button>
           <button type="button" class="panel__btn" id="csvBtn" disabled>⬇ 下載報表（CSV）</button>
         </div>
         <p class="panel__note" id="rankNote"></p>
@@ -168,6 +176,10 @@
         <h2>最新偵測事件</h2>
         <p class="panel__note" id="detNote"></p>
         <ol class="det" id="detList"></ol>
+      </div>
+      <div class="panel" id="routePanel" hidden>
+        <h2>路線安全</h2>
+        <div id="routeBody"></div>
       </div>
       <div class="panel" id="searchPanel" hidden>
         <h2 id="searchTitle">查詢路況</h2>
@@ -187,6 +199,7 @@
 
   <section class="admin" id="adminView" hidden aria-label="系統管理"></section>
   <dialog class="login-dialog" id="loginDialog" aria-label="登入"></dialog>
+  <dialog class="login-dialog ai-dialog" id="aiDialog" aria-label="AI 轄區分析"></dialog>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
@@ -197,6 +210,8 @@
   <script src="js/accidents.js"></script>
   <script src="js/detections.js"></script>
   <script src="js/roads.js"></script>
+  <script src="js/route.js"></script>
+  <script src="js/analysis.js"></script>
   <script src="js/report.js"></script>
   <script src="js/categories.js"></script>
   <script src="js/personas.js"></script>
@@ -207,6 +222,7 @@
   <script src="js/datasource.js"></script>
   <script src="js/ui/dom.js"></script>
   <script src="js/ui/legend.js"></script>
+  <script src="js/ui/spot-layer.js"></script>
   <script src="js/ui/rankings.js"></script>
   <script src="js/ui/detections-list.js"></script>
   <script src="js/ui/search-panel.js"></script>
@@ -214,6 +230,8 @@
   <script src="js/ui/fill-form.js"></script>
   <script src="js/ui/login.js"></script>
   <script src="js/ui/write-card.js"></script>
+  <script src="js/ui/route-panel.js"></script>
+  <script src="js/ui/ai-dialog.js"></script>
   <script src="js/ui/admin-view.js"></script>
   <script src="js/heatmap.js"></script>
 </body>

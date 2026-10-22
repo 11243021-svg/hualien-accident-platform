@@ -166,6 +166,21 @@
     return 1;
   }
 
+  // 點擊或滑鼠位置（螢幕座標）附近最近的點：距離在「點的半徑＋容許誤差」內才算點到；回傳索引，沒有回 -1
+  function nearestPoint(pts, x, y, tol) {
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d <= p.r + tol && d < bestD) {
+        best = i;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
   function circleRadius(value, maxValue) {
     if (!maxValue || maxValue <= 0) return 8;
     return Math.round(8 + 28 * Math.sqrt(Math.max(0, value) / maxValue));
@@ -248,7 +263,7 @@
 
   const api = {
     TIERS, METRIC_LABEL, extractRoad, normRoad, roadBase, roadKey, spotOf, spotsText, annotateAccidents, annotateDetections,
-    metricValue, tierOf, aggregateRoads, circleRadius, roadLimit, visibleRoads, zoomScale, spotScale, matchRoad, noResultText, towns, villages, dataYears, inLastYears, comparePrev,
+    metricValue, tierOf, aggregateRoads, circleRadius, roadLimit, visibleRoads, zoomScale, spotScale, nearestPoint, matchRoad, noResultText, towns, villages, dataYears, inLastYears, comparePrev,
     inPeriodYears, compareYear, denseBounds,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -21,7 +21,7 @@
       label: "一般民眾",
       hint: "輸入路名，看看最近這條路安不安全",
       filters: null, // 路名搜尋三種身分都有，民眾沒有額外的篩選列
-      panels: ["searchPanel", "causeBox"],
+      panels: ["searchPanel", "routePanel", "causeBox"],
       layers: { roads: false, detections: true, cameras: "live" }, // 民眾也能點公路局監視器看即時路況
       showConfidence: false,
     },
@@ -36,7 +36,7 @@
   };
   const DEFAULT_PERSONA = "citizen"; // 沒登入就是一般民眾
   const ALL_FILTERS = ["mayorFilters", "policeFilters"];
-  const ALL_PANELS = ["rankPanel", "detPanel", "searchPanel", "causeBox"];
+  const ALL_PANELS = ["rankPanel", "detPanel", "searchPanel", "routePanel", "causeBox"];
 
   function visibility(persona) {
     const p = PERSONAS[persona];

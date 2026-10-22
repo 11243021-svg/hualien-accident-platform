@@ -221,5 +221,46 @@
     return cache[city];
   }
 
-  root.HotData = { loadEvents, loadAccidents, fetchAllRows, subscribeEvents, auth, admin };
+  // 路線安全：地名 → 座標（OpenStreetMap Nominatim，限花蓮縣範圍）、兩點之間的開車路線（OSRM 公開服務）
+  const HUALIEN_VIEWBOX = "121.2,24.4,121.8,23.0";
+  async function getJson(url, what) {
+    let res;
+    try {
+      res = await fetch(url, { headers: { "Accept-Language": "zh-TW" } });
+    } catch (err) {
+      throw new Error(`${what}連不上，請確認網路`);
+    }
+    if (!res.ok) throw new Error(`${what}暫時無法使用（${res.status}），請稍後再試`);
+    return res.json();
+  }
+  const route = {
+    async geocode(q) {
+      const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&bounded=1" +
+        `&viewbox=${HUALIEN_VIEWBOX}&q=${encodeURIComponent(q)}`;
+      return root.HotRoute.parseNominatim(await getJson(url, "地名查詢服務"));
+    },
+    async drive(a, b) {
+      const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
+      return root.HotRoute.parseOsrm(await getJson(url, "路線規劃服務"));
+    },
+  };
+
+  // AI 轄區分析：交給 Supabase Edge Function ai-analysis 轉問 Gemini（金鑰在後台，網頁看不到）
+  const ai = {
+    async analyze(stats) {
+      const { data, error } = await needClient().functions.invoke("ai-analysis", { body: { stats } });
+      if (error) {
+        let msg = error.message || "AI 分析失敗";
+        try {
+          const j = await error.context.json();
+          if (j && j.error) msg = j.error;
+        } catch (e) { /* 不是 JSON 就用原本的訊息 */ }
+        throw new Error(msg);
+      }
+      if (!data || !data.text) throw new Error("AI 沒有回答，請再試一次");
+      return data;
+    },
+  };
+
+  root.HotData = { loadEvents, loadAccidents, fetchAllRows, subscribeEvents, auth, admin, route, ai };
 })(this);

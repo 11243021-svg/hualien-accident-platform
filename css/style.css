@@ -412,3 +412,41 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .wcard__label { color: var(--text-mut); }
 .wcard__value { overflow-wrap: anywhere; }
 .wcard__go { margin-top: 10px; width: 100%; }
+
+/* 路線安全面板 */
+.route__input { width: 100%; margin-bottom: 6px; box-sizing: border-box; }
+.route__btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.route__msg { margin: 4px 0; font-size: 0.82rem; color: var(--text-mut); min-height: 1em; }
+.route__msg.is-error { color: var(--c-alert); }
+.route__sum { margin: 6px 0 2px; font-weight: 700; line-height: 1.5; }
+.route__meta, .route__note { margin: 0 0 6px; font-size: 0.78rem; color: var(--text-dim); line-height: 1.5; }
+.route__list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.route__item { background: none; border: none; padding: 2px 0; color: var(--text); text-align: left; font: inherit; font-size: 0.86rem; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; min-height: 28px; }
+.route__item:hover { color: var(--accent); }
+.route-pin span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #48c3ac; color: #10151d; font-weight: 700; font-size: 0.8rem; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+.leaflet-container.is-picking { cursor: crosshair; }
+
+/* AI 轄區分析視窗 */
+.ai-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.aidlg__wait { color: var(--accent); margin: 8px 0 4px; }
+.aidlg__body { display: grid; gap: 6px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.aidlg__h { margin: 10px 0 2px; font-size: 1rem; color: var(--accent); }
+.aidlg__p { margin: 0; line-height: 1.7; }
+.aidlg__list { margin: 0; padding-left: 20px; display: grid; gap: 4px; line-height: 1.7; }
+.is-error-text { color: var(--c-alert); }
+#aiBtn { background: var(--accent-soft); color: var(--accent); }
+#aiBtn[hidden] { display: none; }
+
+/* 斑點圖：滑鼠移到點上變手指 */
+.leaflet-container.is-over-spot { cursor: pointer; }
+
+/* 手機版「看什麼時候」收成一行摘要；電腦版不顯示摘要與按鈕、內容一直展開 */
+.fgroup--mfold .fgroup__msum, .fgroup--mfold .fgroup__mtoggle { display: none; }
+@media (max-width: 600px) {
+  .fgroup--mfold .fgroup__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .fgroup--mfold .fgroup__msum { display: block; flex: 1 1 120px; color: var(--text-mut); font-size: 0.85rem; }
+  .fgroup--mfold .fgroup__mtoggle { display: inline-flex; margin-left: auto; }
+  .fgroup--mfold.is-mopen .fgroup__msum { display: none; }
+  .fgroup--mfold:not(.is-mopen) > .fgroup__body { display: none; }
+  .fgroup--mfold .fgroup__head .fgroup__title { margin: 0; }
+}

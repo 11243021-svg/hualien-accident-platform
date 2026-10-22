@@ -57,11 +57,14 @@
   const PANES = {};
   let playTimer = null;
   let toastTimer = null;
-  let accDrawn = null; // 上次畫車禍點時的 { view, bounds }：地圖還在範圍內、資料沒變就不重畫
+  let accDrawn = null; // 上次算斑點時的條件（資料、縮放、身分、選取路段）：都沒變就不重算
   let regionMsg = false; // mapMsg 目前顯示的是不是地區載入訊息
   let session = null; // 登入狀態：null 或 { id, email, name, role, town }（role 為 null＝還沒設定身分）
   let loginDialog = null;
   let writeCard = null;
+  let routePanel = null;
+  let aiDialog = null;
+  let routeLayer = null;
   let adminView = null;
   const myRole = () => (session ? session.role : null);
   let fillCausesCache = null;
@@ -96,7 +99,18 @@
 
   // 小卡片一律獨立開在地圖上（不綁在點上），點被重畫時小卡片才不會跟著關掉
   function openPopup(lat, lon, content, opts) {
-    return L.popup(opts || POPUP_OPTS).setLatLng([lat, lon]).setContent(content).openOn(map);
+    const o = Object.assign({}, opts || POPUP_OPTS);
+    const w = map.getSize().x;
+    // 手機地圖比較窄：左邊不再留 60 像素給縮放按鈕（不然小卡片放不進畫面、右邊被切掉），
+    // 小卡片寬度也不能超過「地圖寬 − 左右留白 − 小卡片內距」
+    if (w < 520) {
+      o.autoPanPaddingTopLeft = [8, 10];
+      o.autoPanPaddingBottomRight = [8, 10];
+    }
+    const room = w - (w < 520 ? 16 : 70) - 40;
+    o.maxWidth = Math.min(o.maxWidth || 300, room);
+    if (o.minWidth) o.minWidth = Math.min(o.minWidth, room);
+    return L.popup(o).setLatLng([lat, lon]).setContent(content).openOn(map);
   }
 
   function inTime(ev) {
@@ -167,17 +181,31 @@
     heatLayer = L.heatLayer([], { radius: HEAT.radius, blur: HEAT.blur, maxZoom: POINTS_ZOOM }).addTo(map);
     // 路段圓圈、車禍點、AI 偵測點畫在同一張 canvas：分好幾張的話，最上面那張會把滑鼠點擊全部吃掉，下面的點就點不到。
     // 疊放順序（下→上）由 restack() 控制：路段圓圈 → 車禍點 → AI 偵測點；名次標籤是另一層，在最上面
-    [["vecPane", 410], ["rankPane", 425]].forEach(([name, z]) => (map.createPane(name).style.zIndex = z));
-    const shared = { pane: "vecPane", renderer: L.canvas({ pane: "vecPane" }) };
+    [["spotPane", 405], ["vecPane", 410], ["routePane", 415], ["rankPane", 425]].forEach(([name, z]) => (map.createPane(name).style.zIndex = z));
+    // 斑點圖畫布不接收點擊（點擊由地圖找最近的點），才不會擋住上面的路段圓圈與偵測點
+    map.getPane("spotPane").style.pointerEvents = "none";
+    // 路線只是畫給人看，不接收點擊，才不會擋住下面的車禍點
+    map.getPane("routePane").style.pointerEvents = "none";
+    routeLayer = L.layerGroup();
+    // bubblingMouseEvents：點到路段圓圈或偵測點時，不要再傳給地圖（不然會同時打開下面車禍點的小卡片）
+    const shared = { pane: "vecPane", renderer: L.canvas({ pane: "vecPane" }), bubblingMouseEvents: false };
     PANES.acc = shared;
     PANES.road = shared;
     PANES.det = shared;
-    accLayer = L.layerGroup();
+    accLayer = new UI.SpotLayer();
     roadLayer = L.layerGroup().addTo(map);
     detLayer = L.layerGroup().addTo(map);
     cameraLayer = UI.cameras.create(map, openPopup);
     legend = UI.legend.create(map);
     map.on("moveend", drawAccidents);
+    if (window.ResizeObserver) {
+      let t = 0;
+      new ResizeObserver(() => {
+        clearTimeout(t);
+        t = setTimeout(() => map.invalidateSize({ pan: false }), 100);
+      }).observe($("map"));
+    }
+    bindSpotEvents();
     map.on("moveend", () => view && drawCameras());
     map.on("zoomend", () => view && drawRoads());
     const v = VIEW[app.region];
@@ -341,44 +369,69 @@
     const zoom = map.getZoom();
     const spot = app.accView === "spot";
     const showPts = spot || zoom >= POINTS_ZOOM || (!!app.query && view.acc.length <= SEARCH_POINTS_MAX);
-    // 資料沒變、地圖也還在上次畫的範圍內、縮放沒變（例如小卡片自動移動地圖）就不重畫
-    if (accDrawn && accDrawn.view === view && accDrawn.spot === spot && accDrawn.zoom === zoom &&
-      (showPts ? accDrawn.bounds && accDrawn.bounds.contains(map.getBounds()) : !accDrawn.bounds)) return;
+    // 資料、縮放、身分、選取的路段都沒變就不用重算（平移地圖由斑點圖層自己重畫）
+    const key = { view, spot, zoom, showPts, persona: app.persona, sel: app.selectedRoadKey };
+    if (accDrawn && Object.keys(key).every((k) => accDrawn[k] === key[k])) return;
+    accDrawn = key;
     const k = persona().layers.roads ? HEAT.intensity * HEAT.mayorScale : HEAT.intensity;
     heatLayer.setLatLngs(showPts ? [] : view.acc.map((e) => [e.lat, e.lon, k]));
-    accLayer.clearLayers();
     if (!showPts) {
-      accDrawn = { view, bounds: null, spot, zoom }; // 熱度圖模式：同一份資料平移地圖不用重設熱度圖
       map.removeLayer(accLayer);
       return;
     }
-    const bounds = map.getBounds().pad(0.2);
-    accDrawn = { view, bounds, spot, zoom };
     const scale = R.spotScale(zoom); // 縮小時點小一點，才不會糊成一片
     const sel = app.selectedRoadKey;
+    const mayor = app.persona === "mayor"; // 公路局畫面以路段圓圈為主，車禍點改小改淡
     // 死亡事故後畫（疊在最上面）、點大一點，才不會被一大片受傷事故蓋住
     const ordered = view.acc.filter((e) => e.severity !== "death").concat(view.acc.filter((e) => e.severity === "death"));
-    ordered.forEach((ev) => {
-      if (!bounds.contains([ev.lat, ev.lon])) return;
+    accLayer.setItems(ordered.map((ev) => {
       const dim = sel && ev.roadKey !== sel;
-      const color = UI.sevColor(ev.severity, F.hourOf(ev.ts)); // 白天淺、晚上深
-      // 公路局畫面以路段圓圈為主，車禍點改小改淡
-      const mayor = app.persona === "mayor";
-      const op = dim ? 0.15 : mayor ? 0.6 : 0.95;
-      const style = Object.assign({
-        radius: Math.max(2, ((mayor ? 3.5 : 5.5) + (ev.severity === "death" ? 2.5 : 0)) * scale),
-        fillColor: color, fillOpacity: op, color, opacity: dim ? 0.15 : 1, weight: 1,
-      }, PANES.acc);
-      const m = L.circleMarker([ev.lat, ev.lon], style);
-      m.bindTooltip(() => el("span", null, `${shortTime(ev.ts)}　${ev.cause}`), TIP_OPTS);
-      m.on("click", () => openPopup(ev.lat, ev.lon, accPopup(ev)));
-      m.on("mouseover", () => m.setStyle({ radius: 9, color: "#ffffff", weight: 2 }));
-      m.on("mouseout", () => m.setStyle(style));
-      m.addTo(accLayer);
-    });
-    accLayer.addTo(map);
-    restack();
+      return {
+        lat: ev.lat,
+        lon: ev.lon,
+        r: Math.max(2, ((mayor ? 3.5 : 5.5) + (ev.severity === "death" ? 2.5 : 0)) * scale),
+        fill: UI.sevColor(ev.severity, F.hourOf(ev.ts)), // 白天淺、晚上深
+        alpha: dim ? 0.15 : mayor ? 0.6 : 0.95,
+        ref: ev,
+      };
+    }));
+    if (!map.hasLayer(accLayer)) accLayer.addTo(map);
   }
+
+  // 斑點圖的點不是 Leaflet 物件：點擊、滑鼠移過時由地圖找最近的點
+  const HOVER = window.matchMedia && window.matchMedia("(hover: hover)").matches;
+  function bindSpotEvents() {
+    let spotTip = null;
+    let pending = null;
+    let raf = 0;
+    const pickingRoute = () => map.getContainer().classList.contains("is-picking");
+    map.on("click", (e) => {
+      if (!map.hasLayer(accLayer) || pickingRoute()) return;
+      const hit = accLayer.hit(e.containerPoint, HOVER ? 3 : 10); // 手指比滑鼠粗，容許誤差大一點
+      if (hit) openPopup(hit.lat, hit.lon, accPopup(hit.ref));
+    });
+    if (!HOVER) return; // 手機沒有「滑鼠移過」
+    const hideTip = () => {
+      if (spotTip && map.hasLayer(spotTip)) map.removeLayer(spotTip);
+      map.getContainer().classList.remove("is-over-spot");
+    };
+    // 滑鼠移動很頻繁，每一畫格最多找一次最近的點
+    map.on("mousemove", (e) => {
+      pending = e.containerPoint;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const hit = map.hasLayer(accLayer) ? accLayer.hit(pending, 2) : null;
+        if (!hit) return hideTip();
+        map.getContainer().classList.add("is-over-spot");
+        if (!spotTip) spotTip = L.tooltip(Object.assign({}, TIP_OPTS, { offset: [0, -8] }));
+        spotTip.setLatLng([hit.lat, hit.lon]).setContent(el("span", null, `${shortTime(hit.ref.ts)}　${hit.ref.cause}`));
+        if (!map.hasLayer(spotTip)) spotTip.addTo(map);
+      });
+    });
+    map.on("mouseout", hideTip);
+  }
+
 
   // 同一張 canvas 依加入順序疊放；每次重畫完把路段圓圈壓到最下面、AI 偵測點拉到最上面
   function restack() {
@@ -512,6 +565,9 @@
       if (app.village) notes.push("車禍資料沒有里別，路段以鄉鎮統計；里別只篩選 AI 偵測事件");
       UI.rankings.render($("rankList"), $("rankNote"), view.roads, { metric: app.metric, selectedKey: app.selectedRoadKey, note: notes.join("。") }, pickRoad);
       $("csvBtn").disabled = !view.roads.length;
+      // AI 分析：只有登入的公路局、系統管理員看得到（後台也會再核對身分）
+      $("aiBtn").hidden = !(myRole() === "mayor" || myRole() === "admin");
+      $("aiBtn").disabled = !view.acc.length;
     }
     if (vis.panels.detPanel) {
       $("detNote").textContent = app.region === "hualien" ? `共 ${view.det.length} 筆（最新 20 筆）` : "這個地區沒有 AI 偵測資料";
@@ -552,6 +608,7 @@
     Object.entries(vis.filters).forEach(([id, on]) => ($(id).hidden = !on));
     document.querySelectorAll("#personaSeg button").forEach((b) => setPressed(b, b.dataset.persona === app.persona));
     $("personaHint").textContent = persona().hint;
+    renderTimeFold();
     $("yearsBox").hidden = !hasYears();
     $("sourceLine").hidden = app.region !== "hualien";
     document.querySelectorAll("#yearsSeg button").forEach((b) => setPressed(b, app.period.kind === "last" && Number(b.dataset.years) === app.period.n));
@@ -637,6 +694,14 @@
     });
   }
 
+  let timeOpen = false; // 手機版「看什麼時候」展開了沒（電腦版一直展開，見 style.css）
+  function renderTimeFold() {
+    $("timeSummary").textContent = `${hasYears() ? periodText() : "全部資料"}・${timeText()}`;
+    $("timeToggle").textContent = timeOpen ? "收起 ▴" : "展開 ▾";
+    $("timeToggle").setAttribute("aria-expanded", String(timeOpen));
+    $("timeGroup").classList.toggle("is-mopen", timeOpen);
+  }
+
   function renderFold() {
     const open = app.filtersOpen;
     $("kindBody").hidden = !open;
@@ -717,6 +782,18 @@
     det.textContent = data.detError ? "AI 偵測：載入失敗" : `AI 偵測：即時（${data.detections.length.toLocaleString()} 筆）`;
   }
 
+  // 路線安全只在民眾畫面：其他畫面把路線收起來
+  function renderRoute() {
+    if (!routePanel) return;
+    if (P.visibility(app.persona).panels.routePanel && app.region === "hualien") {
+      routeLayer.addTo(map);
+      routePanel.refresh();
+    } else {
+      map.removeLayer(routeLayer);
+      routePanel.hide();
+    }
+  }
+
   // 畫面切換鈕：只顯示這個身分能看的畫面；只有一個時整組藏起來
   function renderPersonaSeg() {
     const views = Roles.viewsFor(myRole());
@@ -742,9 +819,10 @@
 
   function render() {
     renderPersonaSeg();
-    if (renderAdminSwitch()) return;
+    if (renderAdminSwitch()) return renderRoute();
     if (!data.accidents[app.region]) return;
     view = compute();
+    renderRoute(); // 篩選結果算好後，沿線車禍跟著重算
     drawAccidents();
     drawRoads();
     drawDetections();
@@ -806,6 +884,23 @@
   }
 
   // 里長下載報表：目前條件下所有達門檻的路段（不只前 10 名）
+  async function runAiAnalysis() {
+    if (!view) return;
+    const meta = { region: REGION_LABEL[app.region], town: app.town, period: hasYears() ? periodText() : "全部資料", time: timeText() };
+    const scope = `條件：${meta.region}・${meta.town || "全部鄉鎮"}・${meta.period}・${meta.time}（共 ${view.acc.length.toLocaleString()} 件）`;
+    const stats = window.HotAnalysis.buildPayload(view.acc, view.roads, meta);
+    $("aiBtn").disabled = true;
+    aiDialog.loading(scope);
+    try {
+      const r = await window.HotData.ai.analyze(stats);
+      aiDialog.show(scope, r.text, r.model);
+    } catch (err) {
+      aiDialog.error("AI 分析失敗：" + err.message);
+    } finally {
+      $("aiBtn").disabled = false;
+    }
+  }
+
   function downloadCsv() {
     if (!view || !view.roads.length) return;
     const now = new Date();
@@ -976,7 +1071,7 @@
     app.village = "";
     app.query = "";
     app.selectedRoadKey = null;
-    accLayer.clearLayers();
+    accLayer.setItems([]);
     roadLayer.clearLayers();
     detLayer.clearLayers();
     heatLayer.setLatLngs([]);
@@ -1106,6 +1201,11 @@
     });
     $("resetBtn").addEventListener("click", resetFilters);
     $("csvBtn").addEventListener("click", downloadCsv);
+    $("aiBtn").addEventListener("click", runAiAnalysis);
+    $("timeToggle").addEventListener("click", () => {
+      timeOpen = !timeOpen;
+      renderTimeFold();
+    });
     $("kindToggle").addEventListener("click", () => {
       app.filtersOpen = !app.filtersOpen;
       saveFoldOpen(app.filtersOpen);
@@ -1181,6 +1281,16 @@
     buildCheckboxes();
     bindControls();
     writeCard = UI.writeCard.create($("writeCard"), focusDetection);
+    aiDialog = UI.aiDialog.create($("aiDialog"));
+    routePanel = UI.routePanel.create($("routeBody"), {
+      map,
+      layer: routeLayer,
+      lineOpts: { pane: "routePane", renderer: L.svg({ pane: "routePane" }) },
+      accidents: () => (view ? view.acc : []),
+      cameras: () => CAM.withStats(CAM.ALL, data.detections).filter((c) => c.liveUrl),
+      periodLabel: () => (hasYears() ? periodText() : ""),
+      openCam: (c) => cameraLayer.open(c),
+    });
     loginDialog = UI.login.bindDialog($("loginDialog"), (email, password) => window.HotData.auth.signIn(email, password).then(setSession));
     adminView = UI.admin.create($("adminView"), {
       api: window.HotData.admin,
@@ -1213,7 +1323,7 @@
     const saved = await sessionPromise; // 上次登入還沒登出：直接進該身分的畫面
     if (saved) await setSession(saved);
     window.HotData.subscribeEvents(onNewDetection, applyUpdate);
-    window.HotApp = { onNewDetection }; // 給自動測試模擬「收到新偵測」用，不會寫進資料庫
+    window.HotApp = { onNewDetection, map }; // 給自動測試用（模擬收到新偵測、查地圖狀態），不會寫進資料庫
   }
 
   start();
