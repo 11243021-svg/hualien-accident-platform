@@ -567,7 +567,7 @@
     const vis = P.visibility(app.persona);
     Object.entries(vis.panels).forEach(([id, on]) => ($(id).hidden = !on));
     if (vis.panels.rankPanel) {
-      const notes = [`依${R.METRIC_LABEL[app.metric]}排序，共 ${view.roads.length} 條路段達到門檻（至少 ${app.minCount} 件）`];
+      const notes = [`依${R.METRIC_LABEL[app.metric]}排名，列出出事 ${app.minCount} 次以上的 ${view.roads.length} 條路`];
       if (app.village) notes.push("車禍資料沒有里別，路段以鄉鎮統計；里別只篩選 AI 偵測事件");
       UI.rankings.render($("rankList"), $("rankNote"), view.roads, { metric: app.metric, selectedKey: app.selectedRoadKey, note: notes.join("。") }, pickRoad);
       $("csvBtn").disabled = !view.roads.length;
@@ -585,6 +585,7 @@
     }
     if (vis.panels.causeBox) {
       const r = A.topCauses(view.acc, 10);
+      $("causeLead").textContent = r.top.length ? `最常見的原因是「${r.top[0].cause}」（${r.top[0].count.toLocaleString()} 件）。` : "";
       causeChart.data.labels = r.top.map((x) => x.cause);
       causeChart.data.datasets[0].data = r.top.map((x) => x.count);
       causeChart.update();
@@ -599,6 +600,7 @@
     ds.data = hours;
     ds.backgroundColor = hours.map((_, h) => (F.isHourHighlighted(h, app.time) ? "#48c3ac" : "rgba(72,195,172,0.22)"));
     hourChart.update();
+    $("hourNote").textContent = window.HotAnalysis.peakText(hours);
   }
 
   // 分段按鈕：外觀（is-on）和螢幕閱讀器狀態（aria-pressed）一起更新
@@ -615,6 +617,7 @@
     document.querySelectorAll("#personaSeg button").forEach((b) => setPressed(b, b.dataset.persona === app.persona));
     $("personaHint").textContent = persona().hint;
     renderTimeFold();
+    $("regionNote").hidden = app.region !== "tainan";
     $("mapTip").textContent = HOVER
       ? "小技巧：點地圖上的點看詳細資料；滾輪放大縮小、按住拖曳移動；放大會出現更多監視器。"
       : "小技巧：點地圖上的點看詳細資料；兩指放大縮小、單指拖曳移動；放大會出現更多監視器。";
@@ -633,7 +636,7 @@
     $("hourLabel").textContent = hourOn ? pad2(app.time.hour) + ":00" : "--:--";
     $("hourLabel").classList.toggle("is-on", hourOn);
     $("hourLabel").classList.toggle("is-off", !hourOn);
-    $("playBtn").textContent = playTimer ? "⏸ 暫停" : "▶ 播放";
+    $("playBtn").textContent = playTimer ? "⏸ 暫停" : "▶ 自動播放 24 小時";
     setChecks("sev", (v) => app.severities.has(v));
     setChecks("weather", (v) => app.weathers.has(v));
     setChecks("type", (v) => app.types.has(v));
@@ -1057,7 +1060,7 @@
   function fillVillages() {
     const sel = $("villageSel");
     const list = app.region === "hualien" ? R.villages(data.detections, app.town) : [];
-    sel.replaceChildren(new Option(list.length ? "全部" : "（沒有偵測資料）", ""));
+    sel.replaceChildren(new Option(list.length ? "全部村里" : "（這裡沒有偵測資料）", ""));
     list.forEach((v) => sel.appendChild(new Option(v, v)));
     sel.disabled = !list.length;
     if (app.village && !list.includes(app.village)) app.village = "";
@@ -1219,6 +1222,8 @@
     });
     $("resetBtn").addEventListener("click", resetFilters);
     $("emptyReset").addEventListener("click", resetFilters);
+    $("accViewHelp").addEventListener("click", () =>
+      showToast("斑點圖：一個點＝一件車禍，看得出每件事故的位置。熱度圖：把車禍多的地方畫成一片顏色，越紅＝越密集，適合看整體哪裡最危險。", 8000));
     $("csvBtn").addEventListener("click", downloadCsv);
     $("aiBtn").addEventListener("click", runAiAnalysis);
     $("timeToggle").addEventListener("click", () => {

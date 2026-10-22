@@ -467,3 +467,10 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .tour__skip { margin-right: auto; }
 .map-msg.is-info { color: var(--text); border-color: var(--accent); }
 .map-empty { top: 50%; transform: translate(-50%, -50%); }
+
+/* 說明小問號、圖表結論、監視器地點小字 */
+.help-q { width: 28px; height: 28px; min-height: 28px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
+.chart-box__lead { margin: 0 0 6px; font-size: 0.85rem; color: var(--text); line-height: 1.5; }
+.cam__sub { margin: -4px 0 6px; font-size: 0.78rem; color: var(--text-mut); line-height: 1.5; overflow-wrap: anywhere; }
+.map-tip--region { color: var(--c-injury); }
+.map-tip[hidden] { display: none; }

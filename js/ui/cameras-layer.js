@@ -20,7 +20,9 @@
       live = liveBox();
       box.append(live.wrap, UI.el("p", "cam__live-note", "公路局即時影像（直播）"));
     }
-    box.append(UI.el("div", "pop__head cam__name", cam.name));
+    const nm = root.HotCameras.splitName(cam.name);
+    box.append(UI.el("div", "pop__head cam__name", nm.main));
+    if (nm.sub) box.append(UI.el("div", "cam__sub", nm.sub));
     const dl = UI.el("dl", "pop__rows");
     const rows = [
       ["座標", `${cam.lat.toFixed(6)}, ${cam.lon.toFixed(6)}`],
@@ -109,7 +111,7 @@
           }
           cams.forEach((cam) => {
             L.marker([cam.lat, cam.lon], { icon, zIndexOffset: 1000 })
-              .bindTooltip(() => UI.el("span", null, `${cam.name}（${cam.count} 件）`), { direction: "top", offset: [0, -14], className: "hot-tip" })
+              .bindTooltip(() => UI.el("span", null, `${root.HotCameras.splitName(cam.name).main}（偵測 ${cam.count} 件）`), { direction: "top", offset: [0, -14], className: "hot-tip" })
               .on("click", () => openCam(cam))
               .addTo(layer);
           });

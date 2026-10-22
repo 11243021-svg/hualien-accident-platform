@@ -38,7 +38,7 @@
           <option value="tainan">台南</option>
         </select>
         <select class="sel" id="townSel" aria-label="鄉鎮"><option value="">全部鄉鎮</option></select>
-        <select class="sel" id="villageSel" aria-label="里"><option value="">全部</option></select>
+        <select class="sel" id="villageSel" aria-label="村里"><option value="">全部村里</option></select>
         <form class="search" id="searchForm">
           <input class="search__input" id="searchInput" type="search" placeholder="路名，例如 建國路" autocomplete="off" aria-label="路名搜尋">
           <button type="submit" class="search__go">查詢</button>
@@ -72,10 +72,10 @@
           </div>
         </div>
         <div class="fgroup__line hour">
-          <span class="controls__label">逐小時</span>
+          <span class="controls__label">一小時一小時看</span>
           <input class="hour__range" type="range" id="hourRange" min="0" max="23" step="1" value="0" aria-label="選擇小時">
           <span class="hour__label" id="hourLabel">--:--</span>
-          <button type="button" class="hour__play" id="playBtn">▶ 播放</button>
+          <button type="button" class="hour__play" id="playBtn">▶ 自動播放 24 小時</button>
         </div>
       </div>
     </div>
@@ -107,9 +107,9 @@
             <option value="casualties">傷亡人數</option>
             <option value="deaths">死亡人數</option>
           </select>
-          <span class="controls__label">分級，至少</span>
-          <input class="num" type="number" id="minCount" min="10" step="1" value="10" aria-label="門檻">
-          <span class="controls__label">件才顯示</span>
+          <span class="controls__label">排名，只列出出事</span>
+          <input class="num" type="number" id="minCount" min="10" step="1" value="10" aria-label="最少件數">
+          <span class="controls__label">次以上的路</span>
         </div>
         <div class="fgroup__line" id="sourceLine">
           <span class="controls__label">AI 偵測來源</span>
@@ -146,10 +146,12 @@
       <div class="map-head">
         <p class="map-hint" id="personaHint"></p>
         <p class="map-tip" id="mapTip"></p>
+        <p class="map-tip map-tip--region" id="regionNote" hidden>台南只有 115 年上半年的車禍資料（政府開放資料），沒有 AI 偵測與監視器，放在這裡給大家比較用。</p>
         <div class="seg seg--sm" id="accViewSeg" role="group" aria-label="車禍呈現方式">
           <button type="button" data-accview="spot" class="is-on" aria-pressed="true">斑點圖</button>
           <button type="button" data-accview="heat" aria-pressed="false">熱度圖</button>
         </div>
+        <button type="button" class="help-q" id="accViewHelp" aria-label="斑點圖和熱度圖差在哪">?</button>
       </div>
       <div class="map-wrap">
         <div id="map"></div>
@@ -193,10 +195,12 @@
       </div>
       <div class="chart-box">
         <h2>24 小時分布</h2>
+        <p class="chart-box__lead" id="hourNote"></p>
         <div class="chart-box__canvas"><canvas id="hourChart"></canvas></div>
       </div>
       <div class="chart-box" id="causeBox">
         <h2>肇因前 10 名</h2>
+        <p class="chart-box__lead" id="causeLead"></p>
         <div class="chart-box__canvas chart-box__canvas--tall"><canvas id="causeChart"></canvas></div>
         <p class="chart-box__note" id="causeNote"></p>
       </div>

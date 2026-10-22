@@ -69,7 +69,15 @@
     return blocks;
   }
 
-  const api = { buildPayload, parseAnswer };
+  // 24 小時分布的一句結論：最多的兩個時段
+  function peakText(hours) {
+    const top = hours.map((n, h) => [h, n]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+    if (!top.length) return "";
+    const fmt = ([h, n]) => `${h}～${h + 1} 點（${n.toLocaleString()} 件）`;
+    return `車禍最多的時段是 ${fmt(top[0])}${top[1] ? `，其次是 ${fmt(top[1])}` : ""}。`;
+  }
+
+  const api = { buildPayload, parseAnswer, peakText };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotAnalysis = api;
 })(this);

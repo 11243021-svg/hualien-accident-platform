@@ -76,7 +76,14 @@
     return [];
   }
 
-  const api = { CAMERAS, ALL, FEATURED, ALL_CAMS_ZOOM, withStats, streamUrl, cameraName, camerasFor, visibleCameras };
+  // 名稱很長時拆成兩行：主標「台9線 206K+400」大字、地點說明小字（| 換成全形比較好讀）
+  function splitName(name) {
+    const i = (name || "").indexOf("（");
+    if (i < 0 || !name.endsWith("）")) return { main: name || "", sub: "" };
+    return { main: name.slice(0, i), sub: name.slice(i + 1, -1).replace(/\|/g, "｜") };
+  }
+
+  const api = { splitName, CAMERAS, ALL, FEATURED, ALL_CAMS_ZOOM, withStats, streamUrl, cameraName, camerasFor, visibleCameras };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotCameras = api;
 })(this);
