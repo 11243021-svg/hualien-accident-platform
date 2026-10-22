@@ -248,7 +248,8 @@
   // AI 轄區分析：交給 Supabase Edge Function ai-analysis 轉問 Gemini（金鑰在後台，網頁看不到）
   const ai = {
     async analyze(stats) {
-      const { data, error } = await needClient().functions.invoke("ai-analysis", { body: { stats } });
+      const fn = root.HOT_CONFIG.aiFunction || "ai-analysis";
+      const { data, error } = await needClient().functions.invoke(fn, { body: { stats } });
       if (error) {
         let msg = error.message || "AI 分析失敗";
         try {
