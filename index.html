@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>花蓮縣交通事故通報平台</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>花蓮縣交通事故通報平台<small class="top__sub">結合 AI 影像辨識與斑點圖視覺化</small></h1>
+    <div class="top__field" id="personaField" hidden>畫面
+      <div class="seg" id="personaSeg">
+        <button type="button" data-persona="mayor" aria-pressed="false">公路局</button>
+        <button type="button" data-persona="police" aria-pressed="false">交通警察隊</button>
+        <button type="button" data-persona="citizen" class="is-on" aria-pressed="true">一般民眾</button>
+        <button type="button" data-persona="admin" aria-pressed="false">系統管理</button>
+      </div>
+    </div>
+    <div class="top__range" id="dataRange">
+      <span id="rangeAcc">車禍：--</span>
+      <span id="rangeDet"></span>
+    </div>
+    <div class="top__auth" id="authBox"></div>
+  </header>
+
+  <section class="controls">
+    <div class="fgroup">
+      <h2 class="fgroup__title">📍 看哪裡</h2>
+      <div class="fgroup__body">
+        <select class="sel" id="regionSel" aria-label="地區">
+          <option value="hualien">花蓮</option>
+          <option value="tainan">台南</option>
+        </select>
+        <select class="sel" id="townSel" aria-label="鄉鎮"><option value="">全部鄉鎮</option></select>
+        <select class="sel" id="villageSel" aria-label="里"><option value="">全部</option></select>
+        <form class="search" id="searchForm">
+          <input class="search__input" id="searchInput" type="search" placeholder="路名，例如 建國路" autocomplete="off" aria-label="路名搜尋">
+          <button type="submit" class="search__go">查詢</button>
+          <button type="button" class="search__clear" id="searchClear">清除</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="fgroup">
+      <h2 class="fgroup__title">🕒 看什麼時候</h2>
+      <div class="fgroup__body">
+        <div class="fgroup__line" id="yearsBox">
+          <div class="seg" id="yearsSeg">
+            <button type="button" data-years="1" class="is-on" aria-pressed="true">最近 1 年</button>
+            <button type="button" data-years="3" aria-pressed="false">最近 3 年</button>
+            <button type="button" data-years="5" aria-pressed="false">全部 5 年</button>
+          </div>
+          <select class="sel" id="yearSel" aria-label="單一年份"><option value="">單一年份…</option></select>
+        </div>
+        <div class="fgroup__line">
+          <div class="seg seg--sm" id="periodSeg">
+            <button type="button" data-period="all" class="is-on" aria-pressed="true">全天</button>
+            <button type="button" data-period="dawn" aria-pressed="false">清晨</button>
+            <button type="button" data-period="day" aria-pressed="false">白天</button>
+            <button type="button" data-period="dusk" aria-pressed="false">傍晚</button>
+            <button type="button" data-period="night" aria-pressed="false">深夜</button>
+          </div>
+        </div>
+        <div class="fgroup__line hour">
+          <span class="controls__label">逐小時</span>
+          <input class="hour__range" type="range" id="hourRange" min="0" max="23" step="1" value="0" aria-label="選擇小時">
+          <span class="hour__label" id="hourLabel">--:--</span>
+          <button type="button" class="hour__play" id="playBtn">▶ 播放</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="fgroup fgroup--fold" id="kindGroup">
+      <div class="fgroup__head">
+        <h2 class="fgroup__title">🔎 看哪種</h2>
+        <span class="fgroup__summary" id="kindSummary"></span>
+        <button type="button" class="fgroup__toggle" id="kindToggle" aria-expanded="false" aria-controls="kindBody">展開 ▾</button>
+      </div>
+      <div class="fgroup__body" id="kindBody" hidden>
+        <div class="fgroup__line">
+          <span class="controls__label">車禍</span>
+          <label class="chk"><input type="checkbox" data-sev="death" checked><i class="dot dot--death"></i>死亡</label>
+          <label class="chk"><input type="checkbox" data-sev="injury" checked><i class="dot dot--injury"></i>受傷</label>
+        </div>
+        <div class="fgroup__line">
+          <span class="controls__label">天候</span>
+          <span class="chks" id="weatherBox"></span>
+          <details class="more" id="typeMore">
+            <summary>事故型態<span id="typeCount"></span> ▾</summary>
+            <div class="more__body" id="typeBox"></div>
+          </details>
+        </div>
+        <div class="fgroup__line" id="mayorFilters">
+          <span class="controls__label">路段依</span>
+          <select class="sel" id="metricSel" aria-label="路段分級依據">
+            <option value="count">事故件數</option>
+            <option value="casualties">傷亡人數</option>
+            <option value="deaths">死亡人數</option>
+          </select>
+          <span class="controls__label">分級，至少</span>
+          <input class="num" type="number" id="minCount" min="10" step="1" value="10" aria-label="門檻">
+          <span class="controls__label">件才顯示</span>
+        </div>
+        <div class="fgroup__line" id="sourceLine">
+          <span class="controls__label">AI 偵測來源</span>
+          <label class="chk"><input type="checkbox" data-source="real" checked><i class="dot dot--real"></i>真實</label>
+          <label class="chk"><input type="checkbox" data-source="sim" checked>模擬</label>
+        </div>
+        <div class="fgroup__sub" id="policeFilters" hidden>
+          <div class="fgroup__line">
+            <span class="controls__label">AI 偵測</span>
+            <span class="chks" id="kindBox"></span>
+          </div>
+          <div class="fgroup__line">
+            <select class="sel" id="fillSel" aria-label="補填狀態">
+              <option value="all">補填：全部</option>
+              <option value="pending">待補填</option>
+              <option value="filled">已補填</option>
+            </select>
+            <label class="chk"><input type="checkbox" id="camLayerChk" checked>顯示攝影機</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="active">
+      <span class="controls__label">目前條件</span>
+      <span class="active__chips" id="chipList"></span>
+      <button type="button" class="active__reset" id="resetBtn">全部重設</button>
+      <span class="active__count" id="countSummary"></span>
+    </div>
+  </section>
+
+  <main class="layout">
+    <div class="map-col">
+      <div class="map-head">
+        <p class="map-hint" id="personaHint"></p>
+        <div class="seg seg--sm" id="accViewSeg" role="group" aria-label="車禍呈現方式">
+          <button type="button" data-accview="spot" class="is-on" aria-pressed="true">斑點圖</button>
+          <button type="button" data-accview="heat" aria-pressed="false">熱度圖</button>
+        </div>
+      </div>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-msg" id="mapMsg" role="status" aria-live="polite" hidden></div>
+        <div class="map-empty" id="emptyHint" hidden>這個條件下沒有事件</div>
+        <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+        <section class="wcard" id="writeCard" aria-live="polite" aria-label="新偵測事件寫入資料庫" hidden></section>
+      </div>
+    </div>
+    <aside class="side">
+      <div class="cards">
+        <div class="card card--total"><span id="statTotalLabel">車禍件數</span><b id="statTotal">0</b><em class="card__delta" id="statDelta"></em></div>
+        <div class="card"><span id="statDeathsLabel">死亡人數</span><b id="statDeaths">0</b></div>
+        <div class="card"><span id="statInjuriesLabel">受傷人數</span><b id="statInjuries">0</b></div>
+      </div>
+      <div class="panel" id="rankPanel">
+        <div class="panel__head">
+          <h2>危險路段排行榜</h2>
+          <button type="button" class="panel__btn" id="csvBtn" disabled>⬇ 下載報表（CSV）</button>
+        </div>
+        <p class="panel__note" id="rankNote"></p>
+        <ol class="rank" id="rankList"></ol>
+      </div>
+      <div class="panel" id="detPanel" hidden>
+        <h2>最新偵測事件</h2>
+        <p class="panel__note" id="detNote"></p>
+        <ol class="det" id="detList"></ol>
+      </div>
+      <div class="panel" id="searchPanel" hidden>
+        <h2 id="searchTitle">查詢路況</h2>
+        <div id="searchBody"></div>
+      </div>
+      <div class="chart-box">
+        <h2>24 小時分布</h2>
+        <div class="chart-box__canvas"><canvas id="hourChart"></canvas></div>
+      </div>
+      <div class="chart-box" id="causeBox">
+        <h2>肇因前 10 名</h2>
+        <div class="chart-box__canvas chart-box__canvas--tall"><canvas id="causeChart"></canvas></div>
+        <p class="chart-box__note" id="causeNote"></p>
+      </div>
+    </aside>
+  </main>
+
+  <section class="admin" id="adminView" hidden aria-label="系統管理"></section>
+  <dialog class="login-dialog" id="loginDialog" aria-label="登入"></dialog>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
+  <script src="js/config.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/accidents.js"></script>
+  <script src="js/detections.js"></script>
+  <script src="js/roads.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/categories.js"></script>
+  <script src="js/personas.js"></script>
+  <script src="js/roles.js"></script>
+  <script src="js/cctv-list.js"></script>
+  <script src="js/cameras.js"></script>
+  <script src="js/cache.js"></script>
+  <script src="js/datasource.js"></script>
+  <script src="js/ui/dom.js"></script>
+  <script src="js/ui/legend.js"></script>
+  <script src="js/ui/rankings.js"></script>
+  <script src="js/ui/detections-list.js"></script>
+  <script src="js/ui/search-panel.js"></script>
+  <script src="js/ui/cameras-layer.js"></script>
+  <script src="js/ui/fill-form.js"></script>
+  <script src="js/ui/login.js"></script>
+  <script src="js/ui/write-card.js"></script>
+  <script src="js/ui/admin-view.js"></script>
+  <script src="js/heatmap.js"></script>
+</body>
+</html>
