@@ -12,70 +12,134 @@
         const btn = UI.el("button", "auth__btn auth__btn--main", "登入");
         btn.type = "button";
         btn.addEventListener("click", () => handlers.openLogin());
-        box.append(btn, UI.el("span", "auth__tip", "民眾不用登入；公路局、交通警察隊、管理員請登入"));
+        box.append(btn, UI.el("span", "auth__tip", "使用 Google 登入並選擇身分；管理身分需核可"));
         return;
       }
-      const who = session.role
+      const pendingText = session.requestedRole === "admin"
+        ? "系統管理員身分只能由現任管理員指派"
+        : session.requestedRole === "mayor" || session.requestedRole === "police"
+          ? `已送出「${Roles.VIEW_LABEL[session.requestedRole]}」申請，等待系統管理員核可`
+          : "一般民眾";
+      // Google 新帳號一開始都是「一般民眾」；如果是申請公路局／交通警察隊進來的，要讓他知道還在等核可
+      const waiting = (!session.role || session.role === "citizen") && session.requestedRole && session.requestedRole !== "citizen";
+      const who = session.role && !waiting
         ? UI.el("span", "auth__who", `${session.name}（${Roles.ROLE_LABEL[session.role]}${session.role === "mayor" && session.town ? "・" + session.town : ""}）`)
-        : UI.el("span", "auth__who is-warn", `${session.email}：這個帳號還沒有設定身分，請找系統管理員`);
+        : UI.el("span", "auth__who is-warn", `${session.name || session.email}：${pendingText}`);
       const out = UI.el("button", "auth__btn", "登出");
       out.type = "button";
       out.addEventListener("click", () => handlers.signOut());
       box.append(who, out);
     },
 
-    // 登入卡片：signIn(email, password) 回傳 Promise，失敗時 reject 帶中文訊息
-    bindDialog(dialog, signIn) {
+    // 登入卡片：先選欲使用的身分，再以 Google OAuth 登入（主要方式）；
+    // 下面另外留「帳號密碼登入」備用：既有的管理員／測試帳號、Google 臨時出狀況、比賽現場都還能登入。
+    bindDialog(dialog, signInWithGoogle, signInWithPassword) {
       dialog.replaceChildren();
       const form = UI.el("form", "login");
       form.method = "dialog";
-      const email = UI.el("input", "auth__input");
-      email.type = "email";
-      email.placeholder = "Email";
-      email.autocomplete = "username";
-      email.required = true;
-      const pw = UI.el("input", "auth__input");
-      pw.type = "password";
-      pw.placeholder = "密碼";
-      pw.autocomplete = "current-password";
-      pw.required = true;
       const msg = UI.el("p", "auth__msg");
       msg.setAttribute("role", "status");
-      const submit = UI.el("button", "auth__btn auth__btn--main", "登入");
+      let selectedRole = "citizen";
+      const roles = [
+        ["citizen", "一般民眾", "查詢路段事故風險與即時路況"],
+        ["mayor", "公路局", "檢視轄區道路安全與改善依據"],
+        ["police", "交通警察隊", "查看 AI 偵測並補填事故資訊"],
+        ["admin", "系統管理員", "管理帳號、權限與誤報紀錄"],
+      ];
+      const choices = UI.el("div", "login__roles");
+      const cards = [];
+      const selectRole = (role) => {
+        selectedRole = role;
+        cards.forEach((card) => {
+          const on = card.dataset.role === role;
+          card.classList.toggle("is-selected", on);
+          card.setAttribute("aria-pressed", String(on));
+        });
+      };
+      roles.forEach(([id, label, note]) => {
+        const card = UI.el("button", "login__role");
+        card.type = "button";
+        card.dataset.role = id;
+        card.setAttribute("aria-pressed", "false");
+        card.append(UI.el("strong", null, label), UI.el("span", null, note));
+        card.addEventListener("click", () => selectRole(id));
+        cards.push(card);
+        choices.append(card);
+      });
+      selectRole(selectedRole);
+      const submit = UI.el("button", "auth__btn auth__btn--google", "使用 Google 帳號繼續");
       submit.type = "submit";
       const cancel = UI.el("button", "auth__btn", "取消");
       cancel.type = "button";
       const btns = UI.el("div", "login__btns");
       btns.append(cancel, submit);
-      const field = (label, input) => {
-        const l = UI.el("label", "fill__field");
-        l.append(UI.el("span", "fill__label", label), input);
-        return l;
-      };
       form.append(
-        UI.el("h2", "login__title", "登入"),
-        UI.el("p", "login__note", "公路局、交通警察隊、系統管理員請用管理員給你的帳號登入。帳號由系統管理員在 Supabase 後台建立。"),
-        field("Email", email), field("密碼", pw), msg, btns,
+        UI.el("h2", "login__title", "登入平台"),
+        UI.el("p", "login__note", "先選擇您要使用的身分，再以 Google 帳號登入。民眾可直接使用；其他身分需經系統管理員核可後，才會開通對應功能。"),
+        UI.el("p", "login__label", "您要以哪種身分使用？"), choices, msg, btns,
       );
       dialog.append(form);
 
+      // 備用：帳號密碼登入（收在摺疊區塊裡，平常不佔位置）
+      const alt = UI.el("details", "login__alt");
+      alt.append(UI.el("summary", null, "用帳號密碼登入（管理員、測試帳號備用）"));
+      const pwForm = UI.el("div", "login__altform"); // 不用 <form>：外面已經是 Google 登入的表單，表單不能包表單
+      const email = UI.el("input", "auth__input");
+      email.type = "email";
+      email.placeholder = "Email";
+      email.autocomplete = "username";
+      const pw = UI.el("input", "auth__input");
+      pw.type = "password";
+      pw.placeholder = "密碼";
+      pw.autocomplete = "current-password";
+      const pwMsg = UI.el("p", "auth__msg");
+      pwMsg.setAttribute("role", "status");
+      const pwBtn = UI.el("button", "auth__btn auth__btn--main", "登入");
+      pwBtn.type = "button";
+      pwForm.append(email, pw, pwBtn, pwMsg);
+      alt.append(pwForm);
+      form.append(alt);
+      const submitPassword = () => {
+        if (!email.value.trim() || !pw.value) {
+          pwMsg.textContent = "請填 Email 和密碼";
+          return;
+        }
+        pwBtn.disabled = true;
+        pwMsg.textContent = "登入中…";
+        signInWithPassword(email.value.trim(), pw.value)
+          .then(() => dialog.close())
+          .catch((err) => {
+            pwMsg.textContent = "登入失敗：" + err.message;
+            pwBtn.disabled = false;
+          });
+      };
+      pwBtn.addEventListener("click", submitPassword);
+      [email, pw].forEach((el) => el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault(); // 不要觸發外面的 Google 登入
+          submitPassword();
+        }
+      }));
+
       const reset = () => {
-        pw.value = ""; // 不把密碼留在畫面上
         msg.textContent = "";
         submit.disabled = false;
+        pw.value = ""; // 不把密碼留在畫面上
+        pwMsg.textContent = "";
+        pwBtn.disabled = false;
       };
       cancel.addEventListener("click", () => dialog.close());
       dialog.addEventListener("close", reset);
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        if (!email.value.trim() || !pw.value) {
-          msg.textContent = "請填 Email 和密碼";
+        if (!/^https?:$/.test(window.location.protocol)) {
+          msg.textContent = "Google 登入要用網站網址開啟才能用；在自己電腦測試請改用下方「帳號密碼登入」。";
+          alt.open = true;
           return;
         }
         submit.disabled = true;
-        msg.textContent = "登入中…";
-        signIn(email.value.trim(), pw.value)
-          .then(() => dialog.close())
+        msg.textContent = "即將前往 Google 登入…";
+        signInWithGoogle(selectedRole)
           .catch((err) => {
             msg.textContent = "登入失敗：" + err.message;
             submit.disabled = false;
@@ -85,7 +149,7 @@
         open() {
           reset();
           dialog.showModal();
-          email.focus();
+          cards[0].focus();
         },
       };
     },

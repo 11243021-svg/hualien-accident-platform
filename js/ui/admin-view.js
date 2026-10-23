@@ -55,9 +55,10 @@
     create(rootEl, opts) {
       const Roles = root.HotRoles;
       const users = block("帳號管理", "設定每個帳號的身分、名字、管理的鄉鎮（公路局才要選）。開新帳號、設密碼請到 Supabase 後台 → Authentication → Add user；自己的身分不能在這裡改。");
+      const requests = block("身分申請", "Google 登入者可申請公路局或交通警察隊身分；核可後才會取得對應功能。系統管理員身分必須由現任管理員直接設定。");
       const dism = block("誤報清單", "標為誤報的偵測事件，所有人的地圖上都看不到；按「復原」就會回到地圖上。");
       const log = block("補填紀錄", "最新 100 筆：誰、什麼時候、做了什麼。");
-      rootEl.replaceChildren(users.box, dism.box, log.box);
+      rootEl.replaceChildren(users.box, requests.box, dism.box, log.box);
 
       async function loadUsers() {
         users.say("載入中…");
@@ -82,7 +83,7 @@
           name.maxLength = 30;
           name.value = u.name;
           name.placeholder = "例：王警員";
-          const role = selectOf([["", "不設定（只能看民眾畫面）"], ...Roles.ROLES.map((r) => [r, Roles.ROLE_LABEL[r]])], u.role || "");
+          const role = selectOf(Roles.ROLES.map((r) => [r, Roles.ROLE_LABEL[r]]), u.role || "citizen");
           const townOpts = [["", "請選擇…"], ...towns.map((x) => [x, x])];
           if (u.town && !towns.includes(u.town)) townOpts.push([u.town, u.town]);
           const town = selectOf(townOpts, u.town);
@@ -92,8 +93,8 @@
           const save = UI.el("button", "auth__btn auth__btn--main", "儲存");
           save.type = "button";
           save.addEventListener("click", async () => {
-            const r = role.value || null;
-            if (r && !name.value.trim()) return users.say("請填名字", true);
+            const r = role.value;
+            if (!name.value.trim()) return users.say("請填名字", true);
             if (r === "mayor" && !town.value) return users.say("公路局帳號要選管理的鄉鎮", true);
             save.disabled = true;
             try {
@@ -110,6 +111,60 @@
         });
         users.body.replaceChildren(t);
         users.say(`共 ${list.length} 個帳號`);
+      }
+
+      async function loadRoleRequests() {
+        requests.say("載入中…");
+        let list;
+        try {
+          list = await opts.api.listRoleRequests();
+        } catch (err) {
+          requests.body.replaceChildren();
+          return requests.say("載入失敗：" + err.message, true);
+        }
+        const { t, tbody } = table(["Email", "名字", "申請身分", "申請時間", "公路局轄區", "處理"]);
+        if (!list.length) emptyRow(tbody, 6, "目前沒有待審核申請");
+        const towns = opts.towns();
+        list.forEach((request) => {
+          const tr = UI.el("tr");
+          const town = selectOf([["", "請選擇…"], ...towns.map((name) => [name, name])], "");
+          town.disabled = request.role !== "mayor";
+          const approve = UI.el("button", "auth__btn auth__btn--main", "核可");
+          const reject = UI.el("button", "auth__btn", "婉拒");
+          approve.type = "button";
+          reject.type = "button";
+          const setBusy = (busy) => { approve.disabled = busy; reject.disabled = busy; town.disabled = busy || request.role !== "mayor"; };
+          approve.addEventListener("click", async () => {
+            if (request.role === "mayor" && !town.value) return requests.say("核可公路局身分前，請選擇管理鄉鎮", true);
+            setBusy(true);
+            try {
+              await opts.api.reviewRoleRequest(request.userId, true, town.value);
+              requests.say(`已核可：${request.email}`);
+              loadRoleRequests();
+              loadUsers();
+            } catch (err) {
+              requests.say("核可失敗：" + err.message, true);
+              setBusy(false);
+            }
+          });
+          reject.addEventListener("click", async () => {
+            setBusy(true);
+            try {
+              await opts.api.reviewRoleRequest(request.userId, false, null);
+              requests.say(`已婉拒：${request.email}`);
+              loadRoleRequests();
+            } catch (err) {
+              requests.say("處理失敗：" + err.message, true);
+              setBusy(false);
+            }
+          });
+          const actions = UI.el("div", "login__btns");
+          actions.append(reject, approve);
+          tr.append(td(request.email), td(request.name), td(Roles.ROLE_LABEL[request.role] || request.role), td(time(request.createdAt)), td(town), td(actions));
+          tbody.append(tr);
+        });
+        requests.body.replaceChildren(t);
+        requests.say(list.length ? `共 ${list.length} 筆待審核申請` : "");
       }
 
       async function loadDismissed() {
@@ -172,6 +227,7 @@
       return {
         show() {
           loadUsers();
+          loadRoleRequests();
           loadDismissed();
           loadLog();
         },

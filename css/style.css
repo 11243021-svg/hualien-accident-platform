@@ -362,7 +362,18 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .login { display: grid; gap: 10px; padding: 20px; }
 .login__title { margin: 0; font-size: 1.15rem; }
 .login__note { margin: 0; color: var(--text-dim); font-size: 0.82rem; line-height: 1.5; }
+.login__label { margin: 2px 0 -2px; color: var(--text-mut); font-size: 0.86rem; font-weight: 700; }
 .login__btns { display: flex; justify-content: flex-end; gap: 8px; }
+.login__roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.login__role { min-height: 84px; padding: 10px; display: grid; gap: 4px; text-align: left; background: var(--bg-2); color: var(--text); border: 1px solid var(--line-2); border-radius: var(--radius-sm); font: inherit; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.login__role:hover { border-color: rgba(72, 195, 172, .65); transform: translateY(-1px); }
+.login__role:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.login__role.is-selected { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(72, 195, 172, .2); }
+.login__role strong { color: var(--text); font-size: .9rem; }
+.login__role span { color: var(--text-dim); font-size: .75rem; line-height: 1.35; }
+.auth__btn--google { width: 100%; background: #fff; color: #263238; border-color: #fff; font-weight: 700; }
+.auth__btn--google::before { content: "G"; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 7px; border-radius: 50%; background: #4285f4; color: #fff; font-weight: 700; }
+@media (max-width: 420px) { .login__roles { grid-template-columns: 1fr; } }
 
 /* 系統管理畫面 */
 .admin { display: grid; gap: 16px; padding: 0 24px 32px; }
@@ -474,3 +485,8 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .cam__sub { margin: -4px 0 6px; font-size: 0.78rem; color: var(--text-mut); line-height: 1.5; overflow-wrap: anywhere; }
 .map-tip--region { color: var(--c-injury); }
 .map-tip[hidden] { display: none; }
+
+/* 登入卡片：備用的帳號密碼登入（摺疊） */
+.login__alt { border-top: 1px solid var(--line); padding-top: 8px; }
+.login__alt summary { cursor: pointer; color: var(--text-mut); font-size: 0.82rem; min-height: 32px; display: flex; align-items: center; }
+.login__altform { display: grid; gap: 6px; margin-top: 6px; }

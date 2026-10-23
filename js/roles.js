@@ -1,8 +1,8 @@
 // 登入身分規則：哪個身分能看哪些畫面、能做什麼（純函式，瀏覽器與 Node 測試共用）。
 // 真正的權限由資料庫把關（supabase/003_roles.sql），這裡只決定畫面上要顯示什麼。
 (function (root) {
-  const ROLES = ["mayor", "police", "admin"];
-  const ROLE_LABEL = { mayor: "公路局", police: "交通警察隊", admin: "系統管理員" };
+  const ROLES = ["citizen", "mayor", "police", "admin"];
+  const ROLE_LABEL = { citizen: "一般民眾", mayor: "公路局", police: "交通警察隊", admin: "系統管理員" };
   const VIEW_LABEL = { mayor: "公路局（路況管理）", police: "交通警察隊", citizen: "一般民眾", admin: "系統管理" };
   const VIEWS = { mayor: ["mayor"], police: ["police"], admin: ["mayor", "police", "citizen", "admin"] };
 

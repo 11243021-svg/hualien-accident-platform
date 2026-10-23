@@ -55,7 +55,7 @@
       });
   }
 
-  // 登入：Supabase Auth（Email＋密碼）。密碼只交給 supabase-js 送到 Supabase，網頁不保存。
+  // 登入：Google OAuth。實際可用權限仍由 app_users 與 RLS 判定，不能由前端選擇身分取得。
   // 登入後查帳號身分表，回傳 { id, email, name, role, town }；還沒設定身分時 name、role 是 null。
   const auth = {
     available: () => !!client(),
@@ -63,6 +63,7 @@
       const sb = client();
       if (!sb) return null;
       const { data } = await sb.auth.getSession();
+      if (data.session) await submitStoredRoleRequest();
       return data.session ? lookupRole(data.session.user) : null;
     },
     async signIn(email, password) {
@@ -72,9 +73,30 @@
       if (error) throw new Error(error.message === "Invalid login credentials" ? "Email 或密碼錯誤" : error.message);
       return lookupRole(data.user);
     },
+    async signInWithGoogle(requestedRole) {
+      const sb = client();
+      if (!sb) throw new Error("登入套件沒有載入，請重新整理");
+      if (!/^https?:$/.test(window.location.protocol)) {
+        throw new Error("請使用網站網址開啟本頁後再登入，不能直接以檔案方式開啟");
+      }
+      // 僅記錄使用者期待的身分，不可用來取得系統權限。
+      sessionStorage.setItem("hot_requested_role", requestedRole || "citizen");
+      if (requestedRole === "mayor" || requestedRole === "police") sessionStorage.setItem("hot_role_request", requestedRole);
+      else sessionStorage.removeItem("hot_role_request");
+      const { error } = await sb.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}${window.location.pathname}`,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (error) throw new Error(error.message);
+    },
     async signOut() {
       const sb = client();
       if (sb) await sb.auth.signOut();
+      sessionStorage.removeItem("hot_requested_role");
+      sessionStorage.removeItem("hot_role_request");
     },
     // 呼叫資料庫的補填函式，回傳補填後的整筆事件（已轉成地圖用格式）
     async fill(id, v) {
@@ -98,6 +120,13 @@
     if (!sb) throw new Error("登入套件沒有載入，請重新整理");
     return sb;
   }
+  async function submitStoredRoleRequest() {
+    const role = sessionStorage.getItem("hot_role_request");
+    if (role !== "mayor" && role !== "police") return;
+    const { error } = await needClient().rpc("submit_role_request", { p_requested_role: role });
+    if (error) throw new Error(error.message || "身分申請送出失敗");
+    sessionStorage.removeItem("hot_role_request");
+  }
   function rowToEvent(data) {
     const row = Array.isArray(data) ? data[0] : data;
     return row ? root.HotDetections.normalizeDetection(row, root.HOT_CONFIG) : null;
@@ -111,11 +140,26 @@
       name: data ? data.display_name : null,
       role: data ? data.role : null,
       town: data ? data.town || "" : "",
+      requestedRole: sessionStorage.getItem("hot_requested_role") || "citizen",
     };
   }
 
   // 系統管理員用：帳號、誤報、補填紀錄（資料庫會再核對是不是管理員）
   const admin = {
+    async listRoleRequests() {
+      const { data, error } = await needClient().rpc("admin_list_role_requests");
+      if (error) throw new Error(error.message);
+      return (data || []).map((r) => ({
+        userId: r.user_id, email: r.email || "", name: r.display_name || "", role: r.requested_role,
+        status: r.status, createdAt: r.created_at ? root.HotDetections.toTaiwanTs(r.created_at) : null,
+      }));
+    },
+    async reviewRoleRequest(userId, approved, town) {
+      const { error } = await needClient().rpc("admin_review_role_request", {
+        p_user_id: userId, p_approved: approved, p_town: town || null,
+      });
+      if (error) throw new Error(error.message);
+    },
     async listUsers() {
       const { data, error } = await needClient().rpc("admin_list_users");
       if (error) throw new Error(error.message);

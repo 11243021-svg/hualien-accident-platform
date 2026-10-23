@@ -208,7 +208,11 @@
       let t = 0;
       new ResizeObserver(() => {
         clearTimeout(t);
-        t = setTimeout(() => map.invalidateSize({ pan: false }), 100);
+        t = setTimeout(() => {
+          // 地圖被藏起來（例如切到系統管理畫面）時寬高是 0，這時重畫熱度圖會出錯，等它再出現才量
+          const el = $("map");
+          if (el.offsetWidth && el.offsetHeight) map.invalidateSize({ pan: false });
+        }, 100);
       }).observe($("map"));
     }
     bindSpotEvents();
@@ -1320,7 +1324,11 @@
       periodLabel: () => (hasYears() ? periodText() : ""),
       openCam: (c) => cameraLayer.open(c),
     });
-    loginDialog = UI.login.bindDialog($("loginDialog"), (email, password) => window.HotData.auth.signIn(email, password).then(setSession));
+    loginDialog = UI.login.bindDialog(
+      $("loginDialog"),
+      (requestedRole) => window.HotData.auth.signInWithGoogle(requestedRole),
+      (email, password) => window.HotData.auth.signIn(email, password).then(setSession),
+    );
     adminView = UI.admin.create($("adminView"), {
       api: window.HotData.admin,
       auth: window.HotData.auth,
