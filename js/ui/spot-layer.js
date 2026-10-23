@@ -47,7 +47,8 @@
       const map = this._map;
       if (!map || !this._canvas) return;
       const size = map.getSize();
-      const dpr = window.devicePixelRatio || 1;
+      // 手機螢幕密度常是 3 倍，畫布會大到拖慢手機；最多用 2 倍，點看起來一樣清楚
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const c = this._canvas;
       c.width = Math.round(size.x * dpr);
       c.height = Math.round(size.y * dpr);

@@ -110,7 +110,7 @@ body {
 @media (max-width: 860px) {
   .top, .controls, .layout { padding-left: 16px; padding-right: 16px; }
   .layout { grid-template-columns: 1fr; }
-  #map { height: 55vh; min-height: 320px; }
+  #map { height: 55vh; height: 55svh; min-height: 320px; }
 }
 
 :root { --c-death: #ff1a1a; --c-injury: #ffe100; }
@@ -259,7 +259,7 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
   .top__range { justify-content: flex-start; }
   .more__body { grid-template-columns: repeat(2, max-content); }
   .search { max-width: none; }
-  #map { height: 60vh; min-height: 360px; }
+  #map { height: 60vh; height: 60svh; min-height: 360px; }
 }
 
 /* 路段前 10 名的名次數字（圓圈中間） */
@@ -309,7 +309,7 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
   .hour__range { flex: 1 1 100%; max-width: 100%; }
   .more { max-width: 100%; }
   .more__body { position: static; margin-top: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); box-shadow: none; }
-  #map { height: 60vh; min-height: 300px; }
+  #map { height: 60vh; height: 60svh; min-height: 300px; }
   input, select, button, textarea { max-width: 100%; }
   .chk, .chip, .det__addr, .rank__name, .rank__sub, .map-hint, .fgroup__summary { overflow-wrap: anywhere; }
   /* 點擊範圍至少 36px 高 */
@@ -490,3 +490,18 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .login__alt { border-top: 1px solid var(--line); padding-top: 8px; }
 .login__alt summary { cursor: pointer; color: var(--text-mut); font-size: 0.82rem; min-height: 32px; display: flex; align-items: center; }
 .login__altform { display: grid; gap: 6px; margin-top: 6px; }
+
+/* 手機：點地圖上的點，資料從地圖下方滑出（最多半張地圖高，可上下滑），不再蓋住整張地圖 */
+.map-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1001; max-height: 50%; overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; background: var(--panel-2); border-top: 2px solid var(--accent); border-radius: 14px 14px 0 0; padding: 10px 14px 12px; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45); animation: sheet-in 0.18s ease-out; }
+.map-sheet[hidden] { display: none; }
+.map-sheet__close { position: sticky; top: 0; float: right; margin: -4px -6px 0 8px; width: 36px; height: 36px; border: 1px solid var(--line-2); border-radius: 50%; background: var(--panel); color: var(--text); font-size: 1.3rem; line-height: 1; cursor: pointer; z-index: 1; }
+.map-sheet .pop__rows { font-size: 0.85rem; }
+.map-sheet .cam__live-box, .map-sheet .cam__video { max-height: 26svh; width: auto; max-width: 100%; margin-inline: auto; }
+.map-sheet .cam__live-img { height: 100%; }
+@keyframes sheet-in { from { transform: translateY(30%); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .map-sheet { animation: none; } }
+.sheet-ring { border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6); }
+/* 地圖右下角的版權字：手機上縮成一行，不再佔掉一大塊地圖 */
+@media (max-width: 640px) {
+  .leaflet-control-attribution { font-size: 9px; line-height: 1.4; max-width: calc(100vw - 48px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}

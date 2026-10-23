@@ -52,7 +52,7 @@
     accView: "spot", // 車禍呈現方式：spot＝斑點圖（每件事故一個點，預設）、heat＝熱度圖
   };
   const data = { accidents: { hualien: null, tainan: null }, detections: [], detError: null };
-  let map, heatLayer, accLayer, roadLayer, detLayer, cameraLayer, legend, hourChart, causeChart;
+  let map, heatLayer, accLayer, roadLayer, detLayer, cameraLayer, legend, sheet, hourChart, causeChart;
   let view = null;
   const PANES = {};
   let playTimer = null;
@@ -99,20 +99,27 @@
     regionMsg = false;
   }
 
-  // 小卡片一律獨立開在地圖上（不綁在點上），點被重畫時小卡片才不會跟著關掉
+  // 小卡片一律獨立開在地圖上（不綁在點上），點被重畫時小卡片才不會跟著關掉。
+  // 手機（地圖窄）改用地圖下方滑出的資料卡：浮在點上的小卡片會蓋住整張地圖、還會把地圖拖走
   function openPopup(lat, lon, content, opts) {
-    const o = Object.assign({}, opts || POPUP_OPTS);
     const w = map.getSize().x;
-    // 手機地圖比較窄：左邊不再留 60 像素給縮放按鈕（不然小卡片放不進畫面、右邊被切掉），
-    // 小卡片寬度也不能超過「地圖寬 − 左右留白 − 小卡片內距」
     if (w < 520) {
-      o.autoPanPaddingTopLeft = [8, 10];
-      o.autoPanPaddingBottomRight = [8, 10];
+      map.closePopup();
+      return sheet.open(lat, lon, content);
     }
-    const room = w - (w < 520 ? 16 : 70) - 40;
+    sheet.close();
+    const o = Object.assign({}, opts || POPUP_OPTS);
+    // 小卡片寬度不能超過「地圖寬 − 左右留白 − 小卡片內距」
+    const room = w - 70 - 40;
     o.maxWidth = Math.min(o.maxWidth || 300, room);
     if (o.minWidth) o.minWidth = Math.min(o.minWidth, room);
     return L.popup(o).setLatLng([lat, lon]).setContent(content).openOn(map);
+  }
+
+  // 關掉目前的小卡片（電腦版）或資料卡（手機版）
+  function closePopup() {
+    map.closePopup();
+    sheet.close();
   }
 
   function inTime(ev) {
@@ -203,6 +210,9 @@
     detLayer = L.layerGroup().addTo(map);
     cameraLayer = UI.cameras.create(map, openPopup);
     legend = UI.legend.create(map);
+    sheet = UI.mapSheet.create(map);
+    // 手機資料卡：點地圖空白處就收起來（跟電腦版小卡片一樣）
+    map.on("preclick", () => sheet.close());
     map.on("moveend", drawAccidents);
     if (window.ResizeObserver) {
       let t = 0;
@@ -287,7 +297,7 @@
         window.HotData.auth.dismiss(ev.id, true)
           .then((updated) => {
             applyUpdate(Object.assign({}, ev, updated || {}, { dismissed: true }));
-            map.closePopup();
+            closePopup();
             showToast("已標為誤報，可在「系統管理」的誤報清單復原");
           })
           .catch((err) => {
@@ -335,7 +345,7 @@
     session = state;
     renderAuth();
     stopPlay();
-    map.closePopup(); // 小卡片要重開才會出現／收起補填表單
+    closePopup(); // 小卡片要重開才會出現／收起補填表單
     app.persona = Roles.defaultView(myRole());
     app.selectedRoadKey = null;
     // 換人登入／登出：上一個人選的鄉鎮不要留著（里長下面會再選回自己的）
@@ -950,7 +960,7 @@
 
   function resetFilters() {
     stopPlay();
-    map.closePopup();
+    closePopup();
     Object.assign(app, {
       period: defaultPeriod(),
       time: { mode: "all", period: null, hour: app.time.hour },
@@ -1090,7 +1100,7 @@
     if (region === app.region) return;
     const prev = app.region;
     stopPlay();
-    map.closePopup();
+    closePopup();
     app.region = region;
     app.town = "";
     app.village = "";
@@ -1142,7 +1152,7 @@
     document.querySelectorAll("#personaSeg button").forEach((b) =>
       b.addEventListener("click", () => {
         stopPlay();
-        map.closePopup();
+        closePopup();
         app.persona = b.dataset.persona;
         app.selectedRoadKey = null;
         render();

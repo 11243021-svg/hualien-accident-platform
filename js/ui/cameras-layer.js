@@ -104,7 +104,7 @@
           drawn = { sig, visible };
           layer.clearLayers();
           if (!visible) {
-            if (camPopup && map.hasLayer(camPopup)) map.closePopup(camPopup);
+            if (camPopup && camPopup.isOpen()) camPopup.close(); // 電腦版小卡片、手機版資料卡都有 close()
             camPopup = null;
             map.removeLayer(layer);
             return;
