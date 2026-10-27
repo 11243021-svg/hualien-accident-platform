@@ -364,6 +364,7 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .login__note { margin: 0; color: var(--text-dim); font-size: 0.82rem; line-height: 1.5; }
 .login__label { margin: 2px 0 -2px; color: var(--text-mut); font-size: 0.86rem; font-weight: 700; }
 .login__btns { display: flex; justify-content: flex-end; gap: 8px; }
+.login__btns .auth__btn:not(.auth__btn--google) { white-space: nowrap; flex: 0 0 auto; } /* 「取消」不要被擠成直排兩行 */
 .login__roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .login__role { min-height: 84px; padding: 10px; display: grid; gap: 4px; text-align: left; background: var(--bg-2); color: var(--text); border: 1px solid var(--line-2); border-radius: var(--radius-sm); font: inherit; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
 .login__role:hover { border-color: rgba(72, 195, 172, .65); transform: translateY(-1px); }

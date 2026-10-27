@@ -62,8 +62,14 @@
     async current() {
       const sb = client();
       if (!sb) return null;
+      // Google 登入失敗時，Supabase 會把原因放在網址後面（?error_description=…），讀出來給使用者看
+      const oauthError = readOAuthError();
       const { data } = await sb.auth.getSession();
-      if (data.session) await submitStoredRoleRequest();
+      if (!data.session && oauthError) throw new Error(oauthError);
+      if (data.session) {
+        // 身分申請送不出去不能害整個登入失敗：先登入，再提示
+        await submitStoredRoleRequest().catch((err) => console.warn(err.message));
+      }
       return data.session ? lookupRole(data.session.user) : null;
     },
     async signIn(email, password) {
@@ -119,6 +125,14 @@
     const sb = client();
     if (!sb) throw new Error("登入套件沒有載入，請重新整理");
     return sb;
+  }
+  function readOAuthError() {
+    const params = new URLSearchParams(window.location.search + "&" + window.location.hash.replace(/^#/, ""));
+    const desc = params.get("error_description") || params.get("error");
+    if (!desc) return "";
+    // 把錯誤參數從網址拿掉，重新整理才不會一直跳同一個錯誤
+    window.history.replaceState(null, "", window.location.origin + window.location.pathname);
+    return "Google 登入沒有成功：" + desc.replace(/\+/g, " ");
   }
   async function submitStoredRoleRequest() {
     const role = sessionStorage.getItem("hot_role_request");

@@ -1349,6 +1349,7 @@
     renderAuth();
     const sessionPromise = window.HotData.auth.current().catch((err) => {
       console.warn("讀取登入狀態失敗：" + err.message);
+      showToast(err.message, 15000); // 例如 Google 登入失敗的原因，要讓使用者看得到
       return null;
     });
     const detPromise = window.HotData.loadEvents()
