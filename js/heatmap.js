@@ -182,7 +182,15 @@
       maxZoom: 18,
       attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors",
     });
-    L.tileLayer(ESRI + "World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxNativeZoom: 16, maxZoom: 18, pane: "overlayPane" }).addTo(map);
+    const labels = L.tileLayer(ESRI + "World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxNativeZoom: 16, maxZoom: 18, pane: "overlayPane" }).addTo(map);
+    // 地名標籤只顯示「目前縮放層級」的圖：Leaflet 換層級時會先把上一層的圖放大頂著、等新圖下載好，
+    // 地名一放大就變成整片模糊的大字（例如巨大的「HuaLien」），網路慢或圖卡住時還會一直留在畫面上
+    const onlyCurrentLabels = () => {
+      const z = labels._tileZoom;
+      Object.keys(labels._levels || {}).forEach((k) => (labels._levels[k].el.style.display = Number(k) === z ? "" : "none"));
+    };
+    labels.on("loading load", onlyCurrentLabels);
+    map.on("zoomanim zoomend", onlyCurrentLabels);
     let tileErrorShown = false;
     tiles.on("tileerror", () => {
       if (tileErrorShown) return;
