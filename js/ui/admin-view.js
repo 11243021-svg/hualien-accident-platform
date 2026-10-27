@@ -54,7 +54,7 @@
   UI.admin = {
     create(rootEl, opts) {
       const Roles = root.HotRoles;
-      const users = block("帳號管理", "設定每個帳號的身分、名字、管理的鄉鎮（公路局才要選）。開新帳號、設密碼請到 Supabase 後台 → Authentication → Add user；自己的身分不能在這裡改。");
+      const users = block("帳號管理", "設定每個帳號的身分、名字、管理的鄉鎮（公路局才要選）。用 Google 登入的人會自動出現在這裡；要開「帳號密碼」帳號請到 Supabase 後台 → Authentication → Add user。刪除帳號要按兩次確認，刪掉後對方可以再用 Google 登入，會變回一般民眾。自己的帳號不能在這裡改或刪。");
       const requests = block("身分申請", "Google 登入者可申請公路局或交通警察隊身分；核可後才會取得對應功能。系統管理員身分必須由現任管理員直接設定。");
       const dism = block("誤報清單", "標為誤報的偵測事件，所有人的地圖上都看不到；按「復原」就會回到地圖上。");
       const log = block("補填紀錄", "最新 100 筆：誰、什麼時候、做了什麼。");
@@ -106,7 +106,37 @@
               save.disabled = false;
             }
           });
-          tr.append(td(u.email), td(name), td(role), td(town), td(time(u.lastSignIn)), td(save));
+          // 刪除要按兩次：第一次變成「確定刪除？」，5 秒內再按一次才真的刪（不用跳出視窗，也不怕手滑）
+          const del = UI.el("button", "atable__del", "刪除");
+          del.type = "button";
+          let armed = 0;
+          del.addEventListener("click", async () => {
+            if (!armed) {
+              del.textContent = "確定刪除？";
+              del.classList.add("is-armed");
+              armed = setTimeout(() => {
+                armed = 0;
+                del.textContent = "刪除";
+                del.classList.remove("is-armed");
+              }, 5000);
+              return;
+            }
+            clearTimeout(armed);
+            del.disabled = true;
+            save.disabled = true;
+            try {
+              await opts.api.deleteUser(u.userId);
+              await loadUsers();
+              users.say(`已刪除帳號：${u.email}`);
+            } catch (err) {
+              users.say("刪除失敗：" + err.message, true);
+              del.disabled = false;
+              save.disabled = false;
+            }
+          });
+          const acts = UI.el("div", "atable__acts");
+          acts.append(save, del);
+          tr.append(td(u.email), td(name), td(role), td(town), td(time(u.lastSignIn)), td(acts));
           tbody.append(tr);
         });
         users.body.replaceChildren(t);

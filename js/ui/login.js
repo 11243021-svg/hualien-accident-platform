@@ -12,19 +12,24 @@
         const btn = UI.el("button", "auth__btn auth__btn--main", "登入");
         btn.type = "button";
         btn.addEventListener("click", () => handlers.openLogin());
-        box.append(btn, UI.el("span", "auth__tip", "使用 Google 登入並選擇身分；管理身分需核可"));
+        box.append(btn, UI.el("span", "auth__tip", "民眾免登入；公路局、警察隊、管理員請登入"));
         return;
       }
-      const pendingText = session.requestedRole === "admin"
-        ? "系統管理員身分只能由現任管理員指派"
-        : session.requestedRole === "mayor" || session.requestedRole === "police"
-          ? `已送出「${Roles.VIEW_LABEL[session.requestedRole]}」申請，等待系統管理員核可`
-          : "一般民眾";
-      // Google 新帳號一開始都是「一般民眾」；如果是申請公路局／交通警察隊進來的，要讓他知道還在等核可
-      const waiting = (!session.role || session.role === "citizen") && session.requestedRole && session.requestedRole !== "citizen";
-      const who = session.role && !waiting
-        ? UI.el("span", "auth__who", `${session.name}（${Roles.ROLE_LABEL[session.role]}${session.role === "mayor" && session.town ? "・" + session.town : ""}）`)
-        : UI.el("span", "auth__who is-warn", `${session.name || session.email}：${pendingText}`);
+      // Google 新帳號一開始都是「一般民眾」；有申請公路局／交通警察隊的，依資料庫的審核結果顯示
+      const citizen = !session.role || session.role === "citizen";
+      const req = session.request; // undefined＝資料庫查不到（還沒跑 008 SQL），改用這次登入選的身分推測
+      const label = (r) => Roles.ROLE_LABEL[r] || r;
+      let warn = "";
+      if (citizen && session.requestedRole === "admin") warn = "系統管理員身分只能由現任管理員指派";
+      else if (citizen && req && req.status === "pending") warn = `已送出「${label(req.role)}」申請，等待系統管理員核可`;
+      else if (citizen && req && req.status === "rejected") warn = `「${label(req.role)}」申請未通過，目前是一般民眾`;
+      else if (citizen && req === undefined && (session.requestedRole === "mayor" || session.requestedRole === "police")) {
+        warn = `已送出「${label(session.requestedRole)}」申請，等待系統管理員核可`;
+      }
+      const roleText = Roles.ROLE_LABEL[session.role || "citizen"];
+      const who = warn
+        ? UI.el("span", "auth__who is-warn", `${session.name || session.email}：${warn}`)
+        : UI.el("span", "auth__who", `${session.name || session.email}（${roleText}${session.role === "mayor" && session.town ? "・" + session.town : ""}）`);
       const out = UI.el("button", "auth__btn", "登出");
       out.type = "button";
       out.addEventListener("click", () => handlers.signOut());
@@ -39,9 +44,9 @@
       form.method = "dialog";
       const msg = UI.el("p", "auth__msg");
       msg.setAttribute("role", "status");
-      let selectedRole = "citizen";
+      let selectedRole = "mayor";
+      // 一般民眾不用登入就能用全部民眾功能，所以這裡只列需要登入的身分
       const roles = [
-        ["citizen", "一般民眾", "查詢路段事故風險與即時路況"],
         ["mayor", "公路局", "檢視轄區道路安全與改善依據"],
         ["police", "交通警察隊", "查看 AI 偵測並補填事故資訊"],
         ["admin", "系統管理員", "管理帳號、權限與誤報紀錄"],
@@ -75,7 +80,7 @@
       btns.append(cancel, submit);
       form.append(
         UI.el("h2", "login__title", "登入平台"),
-        UI.el("p", "login__note", "先選擇您要使用的身分，再以 Google 帳號登入。民眾可直接使用；其他身分需經系統管理員核可後，才會開通對應功能。"),
+        UI.el("p", "login__note", "一般民眾不用登入，關掉這個視窗就能直接使用。以下身分請先選擇，再用 Google 帳號登入；第一次登入會送出申請，系統管理員核可後才會開通。"),
         UI.el("p", "login__label", "您要以哪種身分使用？"), choices, msg, btns,
       );
       dialog.append(form);

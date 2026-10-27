@@ -148,7 +148,13 @@
   async function lookupRole(user) {
     const { data, error } = await client().from("app_users").select("role,display_name,town").eq("user_id", user.id).maybeSingle();
     if (error) console.warn("查帳號身分失敗：" + error.message);
+    // 自己最近一次的身分申請（申請中／已核可／已婉拒）；資料庫還沒跑 008 SQL 時是 undefined（不知道）
+    let request;
+    const rq = await client().rpc("my_role_request");
+    if (rq.error) console.warn("查身分申請失敗：" + rq.error.message);
+    else request = rq.data && rq.data[0] ? { role: rq.data[0].requested_role, status: rq.data[0].status } : null;
     return {
+      request,
       id: user.id,
       email: user.email || "",
       name: data ? data.display_name : null,
@@ -181,6 +187,10 @@
         userId: u.user_id, email: u.email || "", role: u.role || null, name: u.display_name || "", town: u.town || "",
         lastSignIn: u.last_sign_in_at ? root.HotDetections.toTaiwanTs(u.last_sign_in_at) : null,
       }));
+    },
+    async deleteUser(userId) {
+      const { error } = await needClient().rpc("admin_delete_user", { p_user_id: userId });
+      if (error) throw new Error(error.message);
     },
     async setUser(userId, role, name, town) {
       const { error } = await needClient().rpc("admin_set_user", { p_user_id: userId, p_role: role, p_display_name: name, p_town: town });
