@@ -1310,6 +1310,51 @@
     toastTimer = setTimeout(() => (box.hidden = true), ms);
   }
 
+  // 登入資訊自動更新：不用按重新整理
+  // 1. 系統管理畫面：每 10 秒看一次有沒有新帳號、新申請
+  // 2. 已登入的人：每 15 秒看一次自己的身分有沒有被改（例如申請被核可／婉拒），有變就自動切換畫面
+  // 網頁在背景（切到別的分頁）時不查，切回來馬上查一次
+  const sameSession = (a, b) => ["role", "town", "name"].every((k) => (a[k] || "") === (b[k] || "")) &&
+    JSON.stringify(a.request || null) === JSON.stringify(b.request || null);
+  let checkingSelf = false;
+  async function checkSelf() {
+    if (!session || checkingSelf) return;
+    checkingSelf = true;
+    try {
+      const fresh = await window.HotData.auth.current();
+      if (!session) return; // 查的途中登出了
+      if (!fresh) return; // 登入過期或查不到，維持原狀，下次再查
+      if (sameSession(session, fresh)) return;
+      const before = session.role || "citizen";
+      const after = fresh.role || "citizen";
+      if (before !== after || session.town !== fresh.town) {
+        await setSession(fresh); // 身分變了：換成新身分的畫面
+        showToast(after === "citizen"
+          ? "你的身分已被改為一般民眾"
+          : `你的身分已更新為「${Roles.ROLE_LABEL[after]}${after === "mayor" && fresh.town ? "・" + fresh.town : ""}」，畫面已自動切換`, 8000);
+      } else {
+        session = fresh; // 只是申請狀態或名字變了：更新右上角就好
+        renderAuth();
+        if (fresh.request && fresh.request.status === "rejected") showToast(`你的「${Roles.ROLE_LABEL[fresh.request.role]}」申請未通過，目前是一般民眾`, 8000);
+      }
+    } catch (err) {
+      console.warn("自動更新登入資訊失敗：" + err.message);
+    } finally {
+      checkingSelf = false;
+    }
+  }
+  function startAutoRefresh() {
+    const visible = () => document.visibilityState === "visible";
+    const adminOpen = () => !$("adminView").hidden;
+    setInterval(() => visible() && adminOpen() && adminView.refresh(), 10000);
+    setInterval(() => visible() && checkSelf(), 15000);
+    document.addEventListener("visibilitychange", () => {
+      if (!visible()) return;
+      checkSelf();
+      if (adminOpen()) adminView.refresh();
+    });
+  }
+
   async function start() {
     // 資料還沒下載完前，數字卡先寫「載入中」，不要顯示 0（看起來像壞掉）
     ["statTotal", "statDeaths", "statInjuries"].forEach((id) => ($(id).textContent = "載入中"));
@@ -1372,6 +1417,7 @@
     const saved = await sessionPromise; // 上次登入還沒登出：直接進該身分的畫面
     if (saved) await setSession(saved);
     window.HotData.subscribeEvents(onNewDetection, applyUpdate);
+    startAutoRefresh();
     window.HotApp = { onNewDetection, map }; // 給自動測試用（模擬收到新偵測、查地圖狀態），不會寫進資料庫
   }
 

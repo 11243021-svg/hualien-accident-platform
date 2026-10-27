@@ -60,15 +60,31 @@
       const log = block("補填紀錄", "最新 100 筆：誰、什麼時候、做了什麼。");
       rootEl.replaceChildren(users.box, requests.box, dism.box, log.box);
 
-      async function loadUsers() {
-        users.say("載入中…");
+      // 自動更新用：上次畫的內容（一樣就不用重畫）、有沒有改到一半還沒儲存
+      let usersSig = "";
+      let requestsSig = "";
+      let usersDirty = false;
+      users.body.addEventListener("input", () => (usersDirty = true));
+      users.body.addEventListener("change", () => (usersDirty = true));
+      const sigOf = (list) => JSON.stringify(list);
+
+      async function loadUsers(quiet) {
+        if (!quiet) users.say("載入中…");
         let list;
         try {
           list = await opts.api.listUsers();
         } catch (err) {
+          if (quiet) return; // 自動更新失敗（例如網路一時斷掉）就等下一次，不洗掉畫面
           users.body.replaceChildren();
           return users.say("載入失敗：" + err.message, true);
         }
+        const sig = sigOf(list);
+        if (quiet && sig === usersSig) return;
+        if (quiet && (usersDirty || users.box.contains(document.activeElement))) {
+          return users.say("有新的帳號資料，按「儲存」或重新整理後就會看到");
+        }
+        usersSig = sig;
+        usersDirty = false;
         const { t, tbody } = table(["Email", "名字", "身分", "管理鄉鎮", "最後登入", ""]);
         if (!list.length) emptyRow(tbody, 6, "還沒有任何帳號");
         const towns = opts.towns();
@@ -143,15 +159,21 @@
         users.say(`共 ${list.length} 個帳號`);
       }
 
-      async function loadRoleRequests() {
-        requests.say("載入中…");
+      async function loadRoleRequests(quiet) {
+        if (!quiet) requests.say("載入中…");
         let list;
         try {
           list = await opts.api.listRoleRequests();
         } catch (err) {
+          if (quiet) return;
           requests.body.replaceChildren();
           return requests.say("載入失敗：" + err.message, true);
         }
+        const sig = sigOf(list);
+        if (quiet && sig === requestsSig) return;
+        // 正在選鄉鎮、按核可時不要整個重畫
+        if (quiet && requests.box.contains(document.activeElement) && document.activeElement !== document.body) return;
+        requestsSig = sig;
         const { t, tbody } = table(["Email", "名字", "申請身分", "申請時間", "公路局轄區", "處理"]);
         if (!list.length) emptyRow(tbody, 6, "目前沒有待審核申請");
         const towns = opts.towns();
@@ -262,6 +284,11 @@
           loadLog();
         },
         refreshLog: loadLog,
+        // 自動更新：有人新登入、送出申請時，帳號管理與身分申請會自己出現（沒變就不動畫面）
+        refresh() {
+          loadUsers(true);
+          loadRoleRequests(true);
+        },
       };
     },
   };
