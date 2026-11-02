@@ -3,8 +3,9 @@
 (function (root) {
   const ROLES = ["citizen", "mayor", "police", "admin"];
   const ROLE_LABEL = { citizen: "一般民眾", mayor: "公路局", police: "交通警察隊", admin: "系統管理員" };
-  const VIEW_LABEL = { mayor: "公路局（路況管理）", police: "交通警察隊", citizen: "一般民眾", admin: "系統管理" };
-  const VIEWS = { mayor: ["mayor"], police: ["police"], admin: ["mayor", "police", "citizen", "admin"] };
+  const VIEW_LABEL = { mayor: "公路局（路況管理）", police: "交通警察隊", citizen: "一般民眾", detect: "AI 偵測", admin: "系統管理" };
+  // AI 偵測（遙控偵測主機）只給交通警察隊與系統管理員
+  const VIEWS = { mayor: ["mayor"], police: ["police", "detect"], admin: ["mayor", "police", "citizen", "detect", "admin"] };
 
   // 沒登入、或登入了但還沒設定身分：只看民眾畫面
   const viewsFor = (role) => VIEWS[role] || ["citizen"];

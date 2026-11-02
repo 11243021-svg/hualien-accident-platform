@@ -25,6 +25,14 @@
       layers: { roads: false, detections: true, cameras: "live" }, // 民眾也能點公路局監視器看即時路況
       showConfidence: false,
     },
+    detect: {
+      label: "AI 偵測",
+      hint: "選公路局監視器、畫圍籬，讓偵測主機上的 AI 開始偵測並自動紀錄",
+      filters: null, // 整頁畫面，不顯示地圖與篩選
+      panels: [],
+      layers: { roads: false, detections: false, cameras: false },
+      showConfidence: true,
+    },
     admin: {
       label: "系統管理",
       hint: "管理帳號身分、處理誤報、查看補填紀錄",

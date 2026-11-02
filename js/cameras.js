@@ -25,7 +25,18 @@
   // 公路局清單產生的花蓮監視器（web/js/cctv-list.js，用 pipeline/update_cctv.py 產生）；
   // 自己整理過名字的那幾支優先，同一支不重複
   const CCTV = (typeof module !== "undefined" && module.exports ? require("./cctv-list.js") : root.HOT_CCTV) || [];
-  const ALL = CAMERAS.concat(CCTV.filter((c) => !CAMERAS.some((k) => k.id === c.id)).map((c) => Object.assign({ videos: [] }, c)));
+  // 每支監視器在哪條路（web/js/cctv-roads.js，用 pipeline/cctv_roads.py 反查產生）
+  const ROADS = (typeof module !== "undefined" && module.exports ? require("./cctv-roads.js") : root.HOT_CCTV_ROADS) || {};
+  const ALL = CAMERAS.concat(CCTV.filter((c) => !CAMERAS.some((k) => k.id === c.id)).map((c) => Object.assign({ videos: [] }, c)))
+    .map((c) => (ROADS[c.id] ? Object.assign({}, c, { road: ROADS[c.id] }) : c));
+
+  // 「中正路（花蓮市主農里）」；不知道道路回空字串
+  function roadText(cam) {
+    const r = cam && cam.road;
+    if (!r || !r.road) return "";
+    const area = `${r.town || ""}${r.village || ""}`;
+    return area ? `${r.road}（${area}）` : r.road;
+  }
 
   // 地圖縮小時只顯示代表性的監視器（花蓮市、吉安、新城、壽豐主要路段），放大到街道才顯示畫面範圍內全部
   const FEATURED = ["T9-193K+100", "T9-186K+080", "T9-189K+630", "T9-191K+050", "T11-006K+080", "T9-182K+600", "T9-198K+750", "T9-206K+400"];
@@ -37,17 +48,18 @@
   }
 
   function withStats(cameras, detections) {
-    const list = cameras.map((c) => Object.assign({}, c, { count: 0, latest: null }));
+    const list = cameras.map((c) => Object.assign({}, c, { count: 0, real: 0, latest: null }));
     const find = (camera) => list.find((c) => c.liveUrl === camera || c.id === camera);
     detections.forEach((d) => {
       if (!d.camera) return;
       let cam = find(d.camera);
       if (!cam && d.source === "real" && THB_URL.test(d.camera)) {
-        cam = { id: idFromUrl(d.camera), name: `公路局 ${idFromUrl(d.camera)}`, lat: d.lat, lon: d.lon, liveUrl: d.camera, videos: [], count: 0, latest: null };
+        cam = { id: idFromUrl(d.camera), name: `公路局 ${idFromUrl(d.camera)}`, lat: d.lat, lon: d.lon, liveUrl: d.camera, videos: [], count: 0, real: 0, latest: null };
         list.push(cam);
       }
       if (!cam) return;
       cam.count += 1;
+      if (d.source === "real") cam.real += 1; // 真實偵測件數，顯示在監視器圖示的數字小標籤
       if (!cam.latest || d.ts > cam.latest) cam.latest = d.ts;
     });
     return list;
@@ -83,7 +95,7 @@
     return { main: name.slice(0, i), sub: name.slice(i + 1, -1).replace(/\|/g, "｜") };
   }
 
-  const api = { splitName, CAMERAS, ALL, FEATURED, ALL_CAMS_ZOOM, withStats, streamUrl, cameraName, camerasFor, visibleCameras };
+  const api = { roadText, splitName, CAMERAS, ALL, FEATURED, ALL_CAMS_ZOOM, withStats, streamUrl, cameraName, camerasFor, visibleCameras };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotCameras = api;
 })(this);

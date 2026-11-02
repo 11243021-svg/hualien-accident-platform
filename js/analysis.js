@@ -77,7 +77,12 @@
     return `車禍最多的時段是 ${fmt(top[0])}${top[1] ? `，其次是 ${fmt(top[1])}` : ""}。`;
   }
 
-  const api = { buildPayload, parseAnswer, peakText };
+  // 數量最多的前 n 個位置（同數量取前面的；0 不算），圖表用來標紅
+  function topIndexes(values, n) {
+    return values.map((v, i) => [i, v]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, n).map(([i]) => i);
+  }
+
+  const api = { buildPayload, parseAnswer, peakText, topIndexes };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotAnalysis = api;
 })(this);

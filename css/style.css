@@ -512,3 +512,54 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .atable__del { min-height: 36px; padding: 0 12px; background: transparent; color: var(--c-alert); border: 1px solid var(--c-alert); border-radius: 999px; font: inherit; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
 .atable__del.is-armed { background: var(--c-alert); color: #fff; }
 .atable__del:disabled { opacity: 0.6; cursor: wait; }
+
+/* ===== AI 偵測畫面（遙控偵測主機） ===== */
+.detect[hidden] { display: none; }
+.detect { display: grid; gap: 14px; padding: 0 24px 32px; max-width: 1100px; margin: 0 auto; }
+.dintro { margin: 0; color: var(--text-mut); line-height: 1.6; }
+.dbanner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--line-2); background: var(--panel); }
+.dbanner__text { margin: 0; flex: 1 1 320px; line-height: 1.5; }
+.dbanner.is-warn { border-color: var(--c-injury); background: rgba(255, 225, 0, 0.08); }
+.dbanner.is-info { border-color: var(--accent); }
+.dbanner.is-ok { border-color: var(--accent); background: var(--accent-soft); }
+.dstep { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; display: grid; gap: 8px; }
+.dstep__head { display: flex; align-items: center; gap: 10px; }
+.dstep__no { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #06231d; font-weight: 700; font-size: 0.9rem; }
+.dstep__title { margin: 0; font-size: 1.05rem; }
+.dstep__note { margin: 0; color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; }
+.dstep__body { display: grid; gap: 8px; }
+.dstep__why { margin: 0; color: var(--text-mut); font-size: 0.88rem; min-height: 1.2em; }
+.dpick__select { width: 100%; height: auto; min-height: 150px; }
+.dpick__chosen { margin: 0; font-weight: 700; color: var(--accent); }
+.dfence { position: relative; width: 100%; max-width: 820px; min-height: 120px; background: #000; border-radius: 8px; overflow: hidden; }
+.dfence__img { display: block; width: 100%; height: auto; }
+.dfence__img:not([src]) { display: none; }
+.dfence__canvas { position: absolute; left: 0; top: 0; cursor: crosshair; touch-action: manipulation; }
+.dfence__msg { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 12px; text-align: center; color: var(--text-mut); }
+.dfence__msg[hidden] { display: none; }
+.dbtns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dbtns__info { color: var(--text-mut); font-size: 0.85rem; }
+.dstart { min-width: 160px; }
+.dstop { width: auto; margin-top: 0; padding: 0 18px; }
+.dstart[hidden], .dstop[hidden], .dlive[hidden], .dlive__empty[hidden] { display: none; }
+.dlive { display: block; width: 100%; max-width: 960px; border-radius: 8px; background: #000; }
+.dlive__empty { margin: 0; padding: 40px 12px; text-align: center; color: var(--text-mut); background: #000; border-radius: 8px; }
+.dlive__state { margin: 0; font-weight: 700; min-height: 1.2em; }
+.dlive__state.is-alert { color: #ff4d4d; }
+.dlive__state.is-occupied { color: #7bd88f; }
+.dlive__state.is-empty { color: #2ee66b; }
+.dlegend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--text-mut); font-size: 0.82rem; }
+.dlegend__item { display: inline-flex; align-items: center; gap: 6px; }
+.dlegend__sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.dsession { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.dsession__item { display: grid; gap: 6px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px; }
+.dsession__shot { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: #000; }
+.dsession__text { display: grid; gap: 2px; font-size: 0.85rem; color: var(--text-mut); }
+.dsession__text strong { color: var(--text); }
+.dempty { margin: 0; color: var(--text-mut); }
+.cam__detect { width: 100%; margin-top: 8px; }
+@media (max-width: 600px) { .detect { padding: 0 16px 24px; } }
+
+/* 監視器圖示右上角：真實偵測件數 */
+.cam-icon { position: relative; }
+.cam-badge { position: absolute; top: -9px; right: -11px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: #ff4d4d; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; border: 2px solid #10151d; box-sizing: content-box; }

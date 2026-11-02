@@ -30,6 +30,7 @@
   const ROC = 1911; // 民國年 = 西元年 - 1911
   const defaultPeriod = () => ({ kind: "last", n: 1 });
 
+  const DEFAULT_SOURCES = ["real"]; // AI 偵測預設只看真實資料，評審一打開看到的都是真的
   const app = {
     region: "hualien",
     persona: P.DEFAULT_PERSONA, // 沒登入是一般民眾；登入後依身分切換
@@ -42,7 +43,7 @@
     village: "",
     metric: "count",
     minCount: 10,
-    sources: new Set(["real", "sim"]),
+    sources: new Set(DEFAULT_SOURCES), // 預設只看真實偵測；模擬資料（展示用）要自己勾「模擬」
     kinds: new Set(F.KINDS),
     fill: "all", // all／pending／filled
     showCameras: true,
@@ -66,6 +67,7 @@
   let aiDialog = null;
   let routeLayer = null;
   let adminView = null;
+  let detectView = null;
   const myRole = () => (session ? session.role : null);
   let fillCausesCache = null;
   const FILL_CAUSES_N = 15; // 補填肇因下拉列出歷史資料最常見的幾項
@@ -216,7 +218,10 @@
     accLayer = new UI.SpotLayer();
     roadLayer = L.layerGroup().addTo(map);
     detLayer = L.layerGroup().addTo(map);
-    cameraLayer = UI.cameras.create(map, openPopup);
+    cameraLayer = UI.cameras.create(map, openPopup, {
+      canDetect: () => Roles.viewsFor(myRole()).includes("detect"),
+      onDetect: (cam) => openDetect(cam),
+    });
     legend = UI.legend.create(map);
     sheet = UI.mapSheet.create(map);
     // 手機資料卡：點地圖空白處就收起來（跟電腦版小卡片一樣）
@@ -620,7 +625,13 @@
     view.hourBase.forEach((ev) => (hours[F.hourOf(ev.ts)] += 1));
     const ds = hourChart.data.datasets[0];
     ds.data = hours;
-    ds.backgroundColor = hours.map((_, h) => (F.isHourHighlighted(h, app.time) ? "#48c3ac" : "rgba(72,195,172,0.22)"));
+    // 最多的 3 個時段標紅色；選了某個時段時，其他時段變淡
+    const top = window.HotAnalysis.topIndexes(hours, 3);
+    ds.backgroundColor = hours.map((_, h) => {
+      const on = F.isHourHighlighted(h, app.time);
+      if (top.includes(h)) return on ? "#ff4d4d" : "rgba(255,77,77,0.3)";
+      return on ? "#48c3ac" : "rgba(72,195,172,0.22)";
+    });
     hourChart.update();
     $("hourNote").textContent = window.HotAnalysis.peakText(hours);
   }
@@ -764,9 +775,10 @@
     }
     C.WEATHER_GROUPS.filter((w) => app.weathers.has(w)).forEach((w) => add(groupChip("天候", w), () => app.weathers.delete(w)));
     C.TYPE_GROUPS.filter((t) => app.types.has(t)).forEach((t) => add(groupChip("型態", t), () => app.types.delete(t)));
-    if (app.region === "hualien" && app.sources.size < 2) {
-      const text = app.sources.size ? `只看${SOURCE_LABEL[[...app.sources][0]]}偵測` : "不看偵測來源";
-      add(text, () => (app.sources = new Set(["real", "sim"])));
+    const sourcesDefault = app.sources.size === DEFAULT_SOURCES.length && DEFAULT_SOURCES.every((s) => app.sources.has(s));
+    if (app.region === "hualien" && !sourcesDefault) {
+      const text = app.sources.size >= 2 ? "含模擬偵測" : app.sources.size ? `只看${SOURCE_LABEL[[...app.sources][0]]}偵測` : "不看偵測來源";
+      add(text, () => (app.sources = new Set(DEFAULT_SOURCES)));
     }
     if (app.persona === "police" && app.region === "hualien") {
       if (app.kinds.size < F.KINDS.length) {
@@ -838,17 +850,34 @@
     });
   }
 
-  // 系統管理畫面：藏起篩選與地圖，改顯示管理區；切回地圖畫面時 Leaflet 要重新量一次大小
+  // 系統管理、AI 偵測是整頁畫面：藏起篩選與地圖；切回地圖畫面時 Leaflet 要重新量一次大小
   let adminShown = false;
+  let fullShown = false;
   function renderAdminSwitch() {
     const isAdmin = app.persona === "admin";
-    document.querySelector(".controls").hidden = isAdmin;
-    document.querySelector(".layout").hidden = isAdmin;
+    const isDetect = app.persona === "detect";
+    const full = isAdmin || isDetect;
+    document.querySelector(".controls").hidden = full;
+    document.querySelector(".layout").hidden = full;
     $("adminView").hidden = !isAdmin;
+    $("detectView").hidden = !isDetect;
     if (isAdmin && !adminShown) adminView.show();
-    if (!isAdmin && adminShown) setTimeout(() => map.invalidateSize(), 0);
+    if (isDetect) detectView.show();
+    else detectView.hide();
+    if (!full && fullShown) setTimeout(() => map.invalidateSize(), 0);
     adminShown = isAdmin;
-    return isAdmin;
+    fullShown = full;
+    return full;
+  }
+
+  // 監視器小卡片按「用這台偵測」：切到 AI 偵測畫面並帶入這支監視器
+  function openDetect(cam) {
+    closePopup();
+    app.persona = "detect";
+    app.selectedRoadKey = null;
+    render();
+    detectView.pickCamera(cam);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function render() {
@@ -977,7 +1006,7 @@
       types: new Set(),
       town: "",
       village: "",
-      sources: new Set(["real", "sim"]),
+      sources: new Set(DEFAULT_SOURCES),
       kinds: new Set(F.KINDS),
       fill: "all",
       query: "",
@@ -1392,6 +1421,18 @@
       (requestedRole) => window.HotData.auth.signInWithGoogle(requestedRole),
       (email, password) => window.HotData.auth.signIn(email, password).then(setSession),
     );
+    detectView = UI.detectConsole.create($("detectView"), {
+      cameras: () => window.HotCameras.ALL.filter((c) => window.HotCameras.streamUrl(c)),
+      history: (cam) => data.detections
+        .filter((d) => d.camera === cam.liveUrl || d.camera === cam.id || d.camera === window.HotCameras.streamUrl(cam))
+        .sort((a, b) => (a.ts < b.ts ? 1 : -1)),
+      kindLabel: (kind) => F.KIND_LABEL[kind] || kind,
+      onShowMap: () => {
+        app.persona = Roles.viewsFor(myRole()).includes("police") ? "police" : Roles.defaultView(myRole());
+        render();
+      },
+      onRecorded: () => detectView.refreshHistory(),
+    });
     adminView = UI.admin.create($("adminView"), {
       api: window.HotData.admin,
       auth: window.HotData.auth,

@@ -193,9 +193,11 @@
     if (!q) return false;
     // 「建國路」會符合「建國路二段」，「建國路2段」也找得到「建國路二段」；也接受鄉鎮名（「吉安鄉」）
     if (norm(`${ev.town || ""}${ev.road || ""}`).includes(q)) return true;
-    // 巷弄、門牌要比對完整地址；地址寫「中正路1段126巷」，只打「中正路126巷」也算
+    // 巷弄、門牌要比對完整地址；地址寫「中正路1段126巷」，只打「中正路126巷」也算。
+    // 但有指定段（「建國路二段」）就一定要同一段，不能因為去掉「段」就把一段也找出來
     const place = norm(`${ev.place || ""}${ev.address || ""}`);
-    return place.includes(q) || noSection(place).includes(noSection(q));
+    if (place.includes(q)) return true;
+    return q === noSection(q) && noSection(place).includes(q);
   }
 
   // 搜尋找不到時的提示：期間不是 5 年就建議放寬；打了巷弄門牌就建議只打路名
