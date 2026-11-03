@@ -47,7 +47,12 @@
       const pick = UI.el("select", "fill__input dpick__select");
       pick.size = 6;
       const chosen = UI.el("p", "dpick__chosen", "還沒選監視器");
-      s1.body.append(search, pick, chosen);
+      const busy = UI.el("div", "dbusy");
+      busy.hidden = true;
+      const busyText = UI.el("p", "dbusy__text");
+      const busyStop = button("停止目前的偵測", "pop__danger dstop", () => stop());
+      busy.append(busyText, busyStop);
+      s1.body.append(search, pick, chosen, busy);
       function fillPick() {
         const q = search.value.trim();
         const road = (c) => root.HotCameras.roadText(c);
@@ -91,7 +96,7 @@
         stageMsg.textContent = st.service ? "這支監視器目前連不上，換一支試試，或按「重新抓畫面」" : "偵測服務沒開，抓不到畫面";
       });
       canvas.addEventListener("click", (e) => {
-        if (st.running || !snap.naturalWidth) return;
+        if ((st.running && sameAsRunning()) || !snap.naturalWidth) return;
         const r = canvas.getBoundingClientRect();
         st.points.push(D().normPoint(e.clientX - r.left, e.clientY - r.top, r.width, r.height));
         drawFence();
@@ -156,7 +161,8 @@
         legend.append(item);
       });
       const liveState = UI.el("p", "dlive__state");
-      s4.body.append(liveEmpty, live, liveState, legend);
+      const liveCam = UI.el("p", "dlive__cam");
+      s4.body.append(liveEmpty, liveCam, live, liveState, legend);
 
       // ===== ⑥ 本次偵測紀錄 =====
       const s6 = step(6, "本次偵測紀錄", "這次開啟偵測服務以來自動紀錄的事件（每 2 秒更新），已經寫進資料庫，地圖上也看得到。");
@@ -185,8 +191,9 @@
         st.models = s ? s.models : "";
         const wasRunning = st.running;
         st.running = !!(s && s.running);
-        // 服務正在偵測別支（例如重新整理網頁）：畫面跟著服務
-        if (st.running && s.camera && (!st.camera || st.camera.id !== s.camera.id)) {
+        // 偵測主機已經在偵測（例如重新整理網頁）而且還沒選監視器：直接帶入正在偵測的那台。
+        // 已經自己選了別台就不蓋掉，改在第 1 步提示「主機正在偵測另一台」
+        if (st.running && s.camera && !st.camera) {
           const cam = opts.cameras().find((c) => c.id === s.camera.id);
           if (cam) selectCamera(cam, { keepPoints: true });
         }
@@ -213,22 +220,30 @@
         }
         recheck.hidden = st.service && s.models === "ready";
       }
+      // 偵測主機正在偵測的監視器（沒在偵測是 null）；跟自己選的是不是同一台
+      const runningCam = () => (st.running && st.status && st.status.camera) || null;
+      const sameAsRunning = () => !!(runningCam() && st.camera && runningCam().id === st.camera.id);
       function renderButtons() {
         const check = D().canStart({ service: st.service, models: st.models, camera: st.camera, points: st.points });
+        const other = st.running && !sameAsRunning();
         startBtn.disabled = st.running || !check.ok;
         startBtn.hidden = st.running;
         stopBtn.hidden = !st.running;
-        startWhy.textContent = st.running ? "偵測中…要換監視器或改圍籬，請先停止偵測" : check.reason;
-        undo.disabled = st.running || !st.points.length;
-        clear.disabled = st.running || !st.points.length;
+        startWhy.textContent = !st.running ? check.reason
+          : other ? `偵測主機正在偵測「${runningCam().name}」，要改偵測你選的這台，請先按「停止偵測」再按開始`
+            : "偵測中…要改圍籬，請先停止偵測";
+        busy.hidden = !other;
+        if (other) busyText.textContent = `偵測主機目前正在偵測「${runningCam().name}」。你選的這台可以先畫好圍籬，停止目前的偵測後再按「開始偵測」。`;
+        const locked = st.running && sameAsRunning(); // 正在偵測的那台不能改圍籬
+        undo.disabled = locked || !st.points.length;
+        clear.disabled = locked || !st.points.length;
         reload.disabled = !st.camera;
-        search.disabled = st.running;
-        pick.disabled = st.running;
         lineChk.disabled = st.running;
         fenceInfo.textContent = st.points.length ? `已點 ${st.points.length} 個點${st.points.length < 3 ? "（至少要 3 個）" : ""}` : "";
       }
       function renderLiveState() {
         const s = st.status;
+        liveCam.textContent = st.running && s && s.camera ? `即時畫面：${s.camera.name}` : "";
         if (!st.running || !s) {
           liveState.textContent = "";
           return;
@@ -312,6 +327,7 @@
         }
         const top = items.length ? items[0].id : "";
         if (top && lastSessionTop && top !== lastSessionTop && opts.onRecorded) opts.onRecorded(items[0]);
+        renderHistory(); // 新紀錄寫進資料庫後，網站收到就會出現在第 7 步
         lastSessionTop = top;
         if (!items.length) {
           sessionList.replaceChildren(UI.el("p", "dempty", "這次還沒有紀錄。偵測到車輛或物體在圍籬內停超過 15 秒，就會出現在這裡。"));
@@ -385,9 +401,9 @@
           liveEmpty.hidden = false;
           st.running = false; // 下次 show 時依服務狀態重新開啟畫面
         },
+        selected: () => st.camera,
         pickCamera(cam) {
-          if (st.running) return;
-          selectCamera(cam);
+          selectCamera(cam); // 偵測中也可以先選、先畫圍籬，第 1 步會提示要先停止目前的偵測
         },
         refreshHistory: renderHistory,
       };

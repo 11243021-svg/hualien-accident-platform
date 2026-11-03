@@ -550,7 +550,11 @@
     const bounds = map.getBounds().pad(0.2);
     const cams = CAM.camerasFor(CAM.withStats(CAM.ALL, data.detections), mode);
     // 縮小只顯示代表性的監視器，放大到街道才顯示畫面範圍內全部（花蓮有兩百多支）
-    cameraLayer.update(CAM.visibleCameras(cams, map.getZoom(), (c) => bounds.contains([c.lat, c.lon])), visible);
+    // 正在偵測的那台不論縮放都顯示
+    const shown = CAM.visibleCameras(cams, map.getZoom(), (c) => bounds.contains([c.lat, c.lon]));
+    const on = detecting && cams.find((c) => c.id === detecting.id);
+    if (on && !shown.includes(on)) shown.push(on);
+    cameraLayer.update(shown, visible, detecting ? detecting.id : "");
   }
 
   // ===== 側邊面板 =====
@@ -870,6 +874,54 @@
     return full;
   }
 
+  // 從資料庫重新讀偵測事件，補上還沒收到的（即時通知偶爾會漏或比較慢）
+  async function syncDetections() {
+    try {
+      const d = await window.HotData.loadEvents();
+      const have = new Set(data.detections.map((e) => e.id));
+      const add = d.events.filter((e) => !have.has(e.id));
+      if (!add.length) return detectView.refreshHistory();
+      R.annotateDetections(add);
+      data.detections.push(...add);
+      render();
+    } catch (err) {
+      console.warn("重新讀偵測事件失敗：" + err.message);
+    }
+  }
+
+  // AI 偵測狀態：交通警察隊／系統管理員才去問本機偵測服務（一般民眾不會連到本機）。
+  // 地圖畫面上方顯示「AI 偵測中：○○」或「AI 偵測已選：○○」，監視器圖示也會標出正在偵測的那台
+  let detecting = null; // 偵測主機正在偵測的監視器 { id, name } 或 null
+  async function checkDetecting() {
+    if (!Roles.viewsFor(myRole()).includes("detect") || document.visibilityState !== "visible") {
+      detecting = null;
+    } else {
+      try {
+        const s = await window.HotDetect.status();
+        detecting = s.running && s.camera ? s.camera : null;
+      } catch {
+        detecting = null;
+      }
+    }
+    renderDetecting();
+  }
+  function renderDetecting(redraw = true) {
+    const box = $("mapDetecting");
+    const chosen = detectView && detectView.selected();
+    const can = Roles.viewsFor(myRole()).includes("detect");
+    const showIt = can && app.persona !== "detect" && app.persona !== "admin" && (detecting || chosen);
+    box.hidden = !showIt;
+    box.classList.toggle("is-on", !!detecting);
+    if (showIt) {
+      $("mapDetectingText").textContent = detecting
+        ? `AI 偵測中：${detecting.name}${chosen && chosen.id !== detecting.id ? `（你另外選了：${chosen.name}）` : ""}`
+        : `AI 偵測已選：${chosen.name}（還沒開始偵測）`;
+    }
+    const tab = document.querySelector('#personaSeg [data-persona="detect"]');
+    if (tab) tab.textContent = detecting ? "AI 偵測 ●" : "AI 偵測";
+    if (redraw && view) drawCameras();
+  }
+
   // 監視器小卡片按「用這台偵測」：切到 AI 偵測畫面並帶入這支監視器
   function openDetect(cam) {
     closePopup();
@@ -882,6 +934,7 @@
 
   function render() {
     renderPersonaSeg();
+    if (detectView) renderDetecting(false);
     if (renderAdminSwitch()) return renderRoute();
     if (!data.accidents[app.region]) return;
     view = compute();
@@ -1431,7 +1484,8 @@
         app.persona = Roles.viewsFor(myRole()).includes("police") ? "police" : Roles.defaultView(myRole());
         render();
       },
-      onRecorded: () => detectView.refreshHistory(),
+      // 本次紀錄多一筆：等資料庫寫好（約 2～3 秒）再重新讀一次偵測事件，第 7 步歷史紀錄就會出現
+      onRecorded: () => setTimeout(syncDetections, 3000),
     });
     adminView = UI.admin.create($("adminView"), {
       api: window.HotData.admin,
@@ -1467,6 +1521,13 @@
     if (saved) await setSession(saved);
     window.HotData.subscribeEvents(onNewDetection, applyUpdate);
     startAutoRefresh();
+    $("mapDetectingGo").addEventListener("click", () => {
+      app.persona = "detect";
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    checkDetecting();
+    setInterval(checkDetecting, 5000);
     window.HotApp = { onNewDetection, map }; // 給自動測試用（模擬收到新偵測、查地圖狀態），不會寫進資料庫
   }
 

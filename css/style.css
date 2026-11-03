@@ -563,3 +563,23 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* 監視器圖示右上角：真實偵測件數 */
 .cam-icon { position: relative; }
 .cam-badge { position: absolute; top: -9px; right: -11px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: #ff4d4d; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; border: 2px solid #10151d; box-sizing: content-box; }
+.dbusy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; border: 1px solid var(--c-injury); background: rgba(255, 225, 0, 0.08); border-radius: 8px; padding: 8px 12px; }
+.dbusy[hidden] { display: none; }
+.dbusy__text { margin: 0; flex: 1 1 280px; line-height: 1.5; }
+.dlive__cam { margin: 0; font-weight: 700; }
+.dlive__cam:empty { display: none; }
+/* 登入卡片的「用帳號密碼登入」看得出可以點開 */
+.login__alt summary { color: var(--accent); list-style: none; }
+.login__alt summary::-webkit-details-marker { display: none; }
+.login__alt summary::before { content: "▸"; display: inline-block; margin-right: 6px; transition: transform 0.15s; }
+.login__alt[open] summary::before { transform: rotate(90deg); }
+
+/* 地圖上方：AI 偵測中／已選的監視器 */
+.map-detecting { flex: 1 1 100%; order: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; border: 1px solid var(--accent); border-radius: 8px; padding: 6px 10px; background: var(--accent-soft); font-size: 0.9rem; }
+.map-detecting[hidden] { display: none; }
+.map-detecting__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-mut); }
+.map-detecting.is-on { border-color: #ff4d4d; background: rgba(255, 77, 77, 0.1); }
+.map-detecting.is-on .map-detecting__dot { background: #ff4d4d; animation: det-blink 1.2s infinite; }
+@keyframes det-blink { 50% { opacity: 0.25; } }
+.cam-icon.is-detecting { box-shadow: 0 0 0 3px #ff4d4d, 0 0 0 7px rgba(255, 77, 77, 0.35); }
+@media (prefers-reduced-motion: reduce) { .map-detecting.is-on .map-detecting__dot { animation: none; } }

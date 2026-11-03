@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=4de9ce11">
+  <link rel="stylesheet" href="css/style.css?v=bc881cd6">
 </head>
 <body>
   <header class="top">
@@ -147,6 +147,11 @@
       <div class="map-head">
         <p class="map-hint" id="personaHint"></p>
         <p class="map-tip" id="mapTip"></p>
+        <div class="map-detecting" id="mapDetecting" hidden>
+          <span class="map-detecting__dot" aria-hidden="true"></span>
+          <span id="mapDetectingText"></span>
+          <button type="button" class="auth__btn" id="mapDetectingGo">回到 AI 偵測</button>
+        </div>
         <p class="map-tip map-tip--region" id="regionNote" hidden>台南只有 115 年上半年的車禍資料（政府開放資料），沒有 AI 偵測與監視器，放在這裡給大家比較用。</p>
         <div class="seg seg--sm" id="accViewSeg" role="group" aria-label="車禍呈現方式">
           <button type="button" data-accview="spot" class="is-on" aria-pressed="true">斑點圖</button>
@@ -241,7 +246,7 @@
   <script src="js/ui/rankings.js?v=e83a8d42"></script>
   <script src="js/ui/detections-list.js?v=54641ca1"></script>
   <script src="js/ui/search-panel.js?v=b2da4db7"></script>
-  <script src="js/ui/cameras-layer.js?v=280af2d1"></script>
+  <script src="js/ui/cameras-layer.js?v=e2b2515c"></script>
   <script src="js/ui/fill-form.js?v=89452058"></script>
   <script src="js/ui/login.js?v=34089b34"></script>
   <script src="js/ui/write-card.js?v=04d70dea"></script>
@@ -250,7 +255,7 @@
   <script src="js/ui/tour.js?v=c7edadb6"></script>
   <script src="js/ui/admin-view.js?v=025a15a5"></script>
   <script src="js/detect-client.js?v=f3b050f3"></script>
-  <script src="js/ui/detect-console.js?v=5fc80549"></script>
-  <script src="js/heatmap.js?v=e48626fc"></script>
+  <script src="js/ui/detect-console.js?v=3ec9cb1d"></script>
+  <script src="js/heatmap.js?v=e98958e9"></script>
 </body>
 </html>
