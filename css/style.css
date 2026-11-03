@@ -604,3 +604,9 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .dstay__preset:disabled { opacity: 0.5; cursor: default; }
 .legend__num { display: inline-grid; place-items: center; min-width: 16px; height: 16px; border-radius: 999px; background: #ff4d4d; color: #fff; font-size: 10px; font-weight: 700; }
 .legend__dot--test { background: rgba(154, 165, 177, 0.45); border: 2px dotted #9aa5b1; }
+.dline { font-size: 0.8rem; font-weight: 700; }
+.dline--sent { color: #2ee66b; }
+.dline--failed, .dline--not_ready { color: #ff4d4d; }
+.dline--cooldown, .dline--sending { color: var(--text-mut); }
+.dline__note:empty { display: none; }
+.dsession > .dstep__note { grid-column: 1 / -1; }

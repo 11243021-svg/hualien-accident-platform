@@ -160,14 +160,15 @@
       const lineWrap = UI.el("label", "chk");
       const lineChk = UI.el("input");
       lineChk.type = "checkbox";
-      lineWrap.append(lineChk, document.createTextNode(" 偵測到異常時同時發 LINE 通報給團隊（測試時不會發）"));
+      lineWrap.append(lineChk, document.createTextNode(" 偵測到異常時同時發 LINE 通報給團隊"));
+      const lineNote = UI.el("p", "dstep__note dline__note");
       testChk.addEventListener("change", () => renderButtons());
       const startBtn = button("▶ 開始偵測", "auth__btn auth__btn--main dstart", () => start());
       const stopBtn = button("■ 停止偵測", "pop__danger dstop", () => stop());
       const startWhy = UI.el("p", "dstep__why");
       const s3btns = UI.el("div", "dbtns");
       s3btns.append(startBtn, stopBtn);
-      s3.body.append(stayBox, stayNote, testWrap, lineWrap, s3btns, startWhy);
+      s3.body.append(stayBox, stayNote, testWrap, lineWrap, lineNote, s3btns, startWhy);
 
       // ===== ④ 觀察 ⑤ 紀錄 =====
       const s4 = step("4・5", "觀察與自動紀錄", "畫面上的框框是 AI 認出來的車輛或物體；圍籬顏色代表目前狀況。停超過 15 秒會自動紀錄（寫進資料庫、存截圖），不用另外按。");
@@ -188,7 +189,7 @@
       s4.body.append(liveEmpty, liveCam, live, liveState, legend);
 
       // ===== ⑥ 本次偵測紀錄 =====
-      const s6 = step(6, "本次偵測紀錄", "這次開啟偵測服務以來自動紀錄的事件（每 2 秒更新），已經寫進資料庫，地圖上也看得到。");
+      const s6 = step(6, "本次偵測紀錄", "目前選的這支監視器，這次開啟偵測服務以來自動紀錄的事件（每 2 秒更新）。換監視器就只顯示新那支的；其他監視器的紀錄都還在資料庫，可以在第 7 步或地圖上看。");
       const sessionList = UI.el("div", "dsession");
       s6.body.append(sessionList);
 
@@ -263,7 +264,15 @@
         undo.disabled = locked || !st.points.length;
         clear.disabled = locked || !st.points.length;
         reload.disabled = !st.camera;
-        lineChk.disabled = st.running || testChk.checked;
+        // LINE 能不能發：偵測主機要有 LINE 金鑰；勾了「這次是測試」就不發
+        const lineReady = !!(st.status && st.status.lineReady);
+        lineChk.disabled = st.running || testChk.checked || !lineReady;
+        if (!lineReady) lineChk.checked = false;
+        const mins = Math.round(((st.status && st.status.lineCooldown) || 300) / 60);
+        lineNote.textContent = !st.service ? ""
+          : !lineReady ? "⚠ 偵測主機還沒設定 LINE（專案資料夾的 .env 沒有 LINE 金鑰），所以不能發 LINE。"
+            : testChk.checked ? "勾了「這次是測試」就不會發 LINE；要發的話先把測試的勾拿掉。"
+              : `LINE 免費方案每月只能發 200 則：同一支監視器 ${mins} 分鐘內最多發 1 則（資料庫照樣每筆都記）。`;
         testChk.disabled = st.running;
         stayInput.disabled = st.running;
         stayPresets.forEach((b) => {
@@ -310,6 +319,7 @@
         loadSnapshot();
         renderHistory();
         renderButtons();
+        refreshSession();
       }
       function loadSnapshot() {
         if (!st.camera) return;
@@ -367,11 +377,18 @@
         if (top && lastSessionTop && top !== lastSessionTop && opts.onRecorded) opts.onRecorded(items[0]);
         renderHistory(); // 新紀錄寫進資料庫後，網站收到就會出現在第 7 步
         lastSessionTop = top;
-        if (!items.length) {
-          sessionList.replaceChildren(UI.el("p", "dempty", "這次還沒有紀錄。偵測到車輛或物體在圍籬內停超過 15 秒，就會出現在這裡。"));
+        // 只列目前選的這支監視器（換監視器就換成新那支的紀錄）
+        const mine = st.camera ? items.filter((it) => it.cameraId === st.camera.id) : [];
+        const others = items.length - mine.length;
+        const otherNote = others ? UI.el("p", "dstep__note", `這次其他監視器還有 ${others} 筆紀錄（資料庫都有存）。`) : null;
+        if (!mine.length) {
+          const empty = UI.el("p", "dempty", st.camera
+            ? `「${st.camera.name}」這次還沒有紀錄。偵測到車輛或物體在圍籬內停超過設定的秒數，就會出現在這裡。`
+            : "先在第 1 步選監視器。");
+          sessionList.replaceChildren(...[empty, otherNote].filter(Boolean));
           return;
         }
-        sessionList.replaceChildren(...items.slice(0, 30).map((it) => {
+        sessionList.replaceChildren(...mine.slice(0, 30).map((it) => {
           const card = UI.el("article", "dsession__item");
           const img = UI.el("img", "dsession__shot");
           img.alt = `${it.kindLabel} 截圖`;
@@ -383,9 +400,11 @@
             UI.el("span", null, time(it.ts)),
             UI.el("span", null, it.camera),
           );
+          const LINE_TEXT = { sent: "已發 LINE", sending: "LINE 發送中…", failed: "LINE 發送失敗", cooldown: `LINE 冷卻中（${Math.round(((st.status && st.status.lineCooldown) || 300) / 60)} 分鐘內已發過）`, not_ready: "沒設定 LINE，沒發" };
+          if (LINE_TEXT[it.line]) text.append(UI.el("span", "dline dline--" + it.line, LINE_TEXT[it.line]));
           card.append(img, text);
           return card;
-        }));
+        }), ...(otherNote ? [otherNote] : []));
       }
       function renderHistory() {
         if (!st.camera) {
