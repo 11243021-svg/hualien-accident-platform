@@ -78,13 +78,14 @@
   const signature = (cams) => cams.map((c) => `${c.id}|${c.count}|${c.real || 0}|${c.latest || ""}`).join(";");
   // 監視器圖示：有真實偵測的右上角加數字小標籤（真實偵測的點就在監視器位置，會被圖示蓋住，所以用數字表示）
   const iconCache = {};
-  function camIcon(real, detecting) {
+  function camIcon(real, detecting, picked) {
     const num = real > 99 ? "99+" : String(real || 0);
-    const key = num + (detecting ? "|on" : "");
+    const key = num + (detecting ? "|on" : "") + (picked ? "|picked" : "");
     if (!iconCache[key]) {
       const html = real ? `<span class="cam-badge">${num}</span>` : "";
       // 偵測主機正在偵測這台：外圈加紅色脈動，一看就知道是哪一台
-      iconCache[key] = L.divIcon({ className: "cam-icon" + (detecting ? " is-detecting" : ""), html, iconSize: [28, 28] });
+      // AI 偵測選的那台換成紫色（跟地圖上的點、其他監視器分得開）
+      iconCache[key] = L.divIcon({ className: "cam-icon" + (picked ? " is-picked" : "") + (detecting ? " is-detecting" : ""), html, iconSize: [28, 28] });
     }
     return iconCache[key];
   }
@@ -119,9 +120,9 @@
       }
       return {
         open: openCam,
-        // detectingId：偵測主機正在偵測的監視器 id（沒有就是空字串）
-        update(cams, visible, detectingId) {
-          const sig = visible ? signature(cams) + "#" + (detectingId || "") : "";
+        // detectingId：偵測主機正在偵測的監視器 id；pickedId：AI 偵測畫面選的監視器 id（沒有就是空字串）
+        update(cams, visible, detectingId, pickedId) {
+          const sig = visible ? signature(cams) + "#" + (detectingId || "") + "#" + (pickedId || "") : "";
           if (drawn && drawn.sig === sig && drawn.visible === visible) return;
           drawn = { sig, visible };
           layer.clearLayers();
@@ -133,8 +134,9 @@
           }
           cams.forEach((cam) => {
             const on = !!detectingId && cam.id === detectingId;
-            L.marker([cam.lat, cam.lon], { icon: camIcon(cam.real, on), zIndexOffset: on ? 1100 : 1000 })
-              .bindTooltip(() => UI.el("span", null, `${on ? "AI 偵測中｜" : ""}${root.HotCameras.splitName(cam.name).main}（真實偵測 ${cam.real || 0} 件）`), { direction: "top", offset: [0, -14], className: "hot-tip" })
+            const picked = !!pickedId && cam.id === pickedId;
+            L.marker([cam.lat, cam.lon], { icon: camIcon(cam.real, on, picked), zIndexOffset: on || picked ? 1100 : 1000 })
+              .bindTooltip(() => UI.el("span", null, `${on ? "AI 偵測中｜" : picked ? "AI 偵測已選｜" : ""}${root.HotCameras.splitName(cam.name).main}（真實偵測 ${cam.real || 0} 件）`), { direction: "top", offset: [0, -14], className: "hot-tip" })
               .on("click", () => openCam(cam))
               .addTo(layer);
           });

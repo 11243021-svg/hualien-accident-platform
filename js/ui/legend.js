@@ -60,9 +60,16 @@
             Object.keys(UI.KIND_COLOR).forEach((k) => box.append(row(dot(UI.KIND_COLOR[k], "legend__dot--det"), F.KIND_LABEL[k])));
             box.append(row(dot(UI.TEXT_MUT, "legend__dot--det"), "真實偵測（實心白框）"));
             box.append(row(UI.el("i", "legend__dot legend__dot--sim"), "模擬資料（空心虛線）"));
+            box.append(row(UI.el("i", "legend__dot legend__dot--test"), "測試資料（灰色點點框，勾「測試」才顯示）"));
           }
           const cams = root.HotPersonas.PERSONAS[persona].layers.cameras;
           if (cams && region === "hualien") box.append(row(UI.el("span", "legend__cam", "📷"), cams === "live" ? "公路局監視器（點了看即時路況）" : "攝影機"));
+          if (cams === "all" && region === "hualien") {
+            const sw = UI.el("i", "legend__dot");
+            sw.style.background = "#9b5de5";
+            box.append(row(sw, "紫色監視器＝AI 偵測選的那台"));
+            box.append(row(UI.el("span", "legend__num", "N"), "紅色數字＝真實偵測件數"));
+          }
           if (cams && region === "hualien") box.append(UI.el("div", "legend__note", "放大地圖會出現更多監視器"));
         },
       };

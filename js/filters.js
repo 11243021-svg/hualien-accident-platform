@@ -58,7 +58,7 @@
   }
 
   const SEV_LABEL = { death: "死亡", injury: "受傷" };
-  const SOURCE_LABEL = { real: "真實", sim: "模擬" };
+  const SOURCE_LABEL = { real: "真實", sim: "模擬", test: "測試" };
 
   // 「看哪種」收起時的一行摘要，例：「死亡＋受傷・全部天候・全部型態・真實＋模擬」
   // sources 為 null 表示這個地區沒有 AI 偵測（不顯示來源）；extras 是身分專屬的非預設條件
@@ -75,8 +75,9 @@
     parts.push(listed(weathers, "全部天候", "天候", "種"));
     parts.push(listed(types, "全部型態", "型態", "類"));
     if (sources) {
-      if (sources.size >= 2) parts.push("真實＋模擬");
-      else if (sources.size === 1) parts.push(`只看${SOURCE_LABEL[[...sources][0]]}`);
+      const order = ["real", "sim", "test"].filter((s) => sources.has(s));
+      if (order.length >= 2) parts.push(order.map((s) => SOURCE_LABEL[s]).join("＋"));
+      else if (order.length === 1) parts.push(`只看${SOURCE_LABEL[order[0]]}`);
       else parts.push("不看偵測");
     }
     return parts.concat(extras || []).join("・");

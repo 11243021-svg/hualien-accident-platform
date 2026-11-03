@@ -21,7 +21,7 @@
   const PLAY_INTERVAL_MS = 1000;
   const REGION_LABEL = { hualien: "花蓮", tainan: "台南" };
   const SEV_LABEL = { death: "死亡", injury: "受傷" };
-  const SOURCE_LABEL = { real: "真實", sim: "模擬" };
+  const SOURCE_LABEL = { real: "真實", sim: "模擬", test: "測試" };
   const FILL_LABEL = { pending: "待補填", filled: "已補填" };
   // 一打開先看這幾個鄉鎮（花蓮車禍最集中的地方），沒列的地區看整個地區最集中的範圍
   const FOCUS_TOWNS = { hualien: ["花蓮市", "吉安鄉"] };
@@ -247,6 +247,33 @@
 
   const shortTime = (ts) => ts.slice(5, 16).replace("T", " ");
 
+  // 好幾個點疊在一起：小卡片上方「這裡有 N 件，第 1／N 件 ‹ ›」，一件一件看（死亡排前面，再依時間新到舊）
+  function stackPopup(list) {
+    const byTime = (a, b) => (a.ts < b.ts ? 1 : -1);
+    const sorted = list.filter((e) => e.severity === "death").sort(byTime).concat(list.filter((e) => e.severity !== "death").sort(byTime));
+    const wrap = el("div", "pop-stack");
+    const bar = el("div", "pop-stack__bar");
+    const prev = el("button", "pop-stack__btn", "‹");
+    const next = el("button", "pop-stack__btn", "›");
+    prev.type = next.type = "button";
+    prev.setAttribute("aria-label", "上一件");
+    next.setAttribute("aria-label", "下一件");
+    const label = el("span", "pop-stack__label");
+    bar.append(prev, label, next);
+    const body = el("div");
+    wrap.append(bar, body);
+    let i = 0;
+    const show = () => {
+      const deaths = sorted.filter((e) => e.severity === "death").length;
+      label.textContent = `這個位置有 ${sorted.length} 件${deaths ? `（死亡 ${deaths} 件）` : ""}・第 ${i + 1}／${sorted.length} 件`;
+      body.replaceChildren(accPopup(sorted[i]));
+    };
+    prev.addEventListener("click", () => { i = (i - 1 + sorted.length) % sorted.length; show(); });
+    next.addEventListener("click", () => { i = (i + 1) % sorted.length; show(); });
+    show();
+    return wrap;
+  }
+
   function accPopup(ev) {
     const box = el("div", "pop");
     const head = el("div", "pop__head");
@@ -272,7 +299,7 @@
       ...(cam ? [["監視器", cam]] : []),
       ...(ev.place && !cam && ev.place !== D.shortAddress(ev) && !/^\d+號,/.test(ev.place) ? [["攝影機地點", ev.place]] : []),
       ...(persona().showConfidence ? [["信心分數", Math.round(ev.confidence * 100) + "%"]] : []),
-      ["來源", ev.source === "real" ? "AI 實際偵測" : "模擬資料"],
+      ["來源", { real: "AI 實際偵測", sim: "模擬資料", test: "AI 偵測（測試時記的）" }[ev.source] || ev.source],
     ];
     const filled = [
       ["傷亡", ev.deaths === null && ev.injuries === null ? "待補填" : `死亡 ${ev.deaths ?? "—"}、受傷 ${ev.injuries ?? "—"}`],
@@ -289,14 +316,14 @@
     box.append(head);
     section("AI 偵測當下自動寫入", auto, "pop__sec--auto");
     section("事後人工補填（交通警察隊）", filled, "pop__sec--fill");
-    if (ev.source === "real" && ev.snapshot) {
+    if (ev.source !== "sim" && ev.snapshot) {
       const img = el("img", "pop__shot");
       img.alt = "警報截圖";
       img.src = ev.snapshot;
       img.onerror = () => img.replaceWith(el("p", "pop__note", "截圖檔遺失"));
       box.append(img);
     } else {
-      box.append(el("p", "pop__note", ev.source === "real" ? "截圖檔遺失" : "模擬資料，無截圖"));
+      box.append(el("p", "pop__note", ev.source !== "sim" ? "截圖檔遺失" : "模擬資料，無截圖"));
     }
     if (app.persona === "police") {
       if (Roles.canFill(myRole())) box.append(UI.fillForm(ev, fillCauses(), (v) => saveFill(ev, v)));
@@ -441,7 +468,9 @@
     map.on("click", (e) => {
       if (!map.hasLayer(accLayer) || pickingRoute()) return;
       const hit = accLayer.hit(e.containerPoint, HOVER ? 3 : 10); // 手指比滑鼠粗，容許誤差大一點
-      if (hit) openPopup(hit.lat, hit.lon, accPopup(hit.ref));
+      const hits = accLayer.hitAll(e.containerPoint, HOVER ? 3 : 10);
+      if (hit && hits.length > 1) openPopup(hits[0].lat, hits[0].lon, stackPopup(hits.map((h) => h.ref)));
+      else if (hit) openPopup(hit.lat, hit.lon, accPopup(hit.ref));
     });
     if (!HOVER) return; // 手機沒有「滑鼠移過」
     const hideTip = () => {
@@ -528,13 +557,15 @@
     view.det.forEach((ev) => {
       const color = UI.KIND_COLOR[ev.kind];
       const sim = ev.source === "sim";
-      // 真實事件：實心＋白框；模擬資料：空心虛線，才不會搶走真實事件的注意力
+      const testing = ev.source === "test";
+      // 真實事件：實心＋白框；模擬資料：空心虛線；測試資料：半透明＋灰框（才不會搶走真實事件的注意力）
       const look = sim
         ? { fillOpacity: 0.15, color, weight: 2, dashArray: "3 3" }
-        : { fillOpacity: 0.95, color: "#ffffff", weight: 2 };
+        : testing ? { fillOpacity: 0.45, color: "#9aa5b1", weight: 2, dashArray: "1 3" }
+          : { fillOpacity: 0.95, color: "#ffffff", weight: 2 };
       const style = Object.assign({ radius: 8, fillColor: color }, look, PANES.det);
       const m = L.circleMarker([ev.lat, ev.lon], style);
-      m.bindTooltip(() => el("span", null, `${sim ? "［模擬］" : ""}${shortTime(ev.ts)}　${F.KIND_LABEL[ev.kind]}`), TIP_OPTS);
+      m.bindTooltip(() => el("span", null, `${sim ? "［模擬］" : testing ? "［測試］" : ""}${shortTime(ev.ts)}　${F.KIND_LABEL[ev.kind]}`), TIP_OPTS);
       m.on("click", () => openPopup(ev.lat, ev.lon, detPopup(ev)));
       m.on("mouseover", () => m.setStyle({ radius: 12 }));
       m.on("mouseout", () => m.setStyle(style));
@@ -554,7 +585,11 @@
     const shown = CAM.visibleCameras(cams, map.getZoom(), (c) => bounds.contains([c.lat, c.lon]));
     const on = detecting && cams.find((c) => c.id === detecting.id);
     if (on && !shown.includes(on)) shown.push(on);
-    cameraLayer.update(shown, visible, detecting ? detecting.id : "");
+    const chosen = detectView && detectView.selected();
+    const pickedId = detecting ? detecting.id : chosen ? chosen.id : "";
+    const picked = pickedId && cams.find((c) => c.id === pickedId);
+    if (picked && !shown.includes(picked)) shown.push(picked);
+    cameraLayer.update(shown, visible, detecting ? detecting.id : "", pickedId);
   }
 
   // ===== 側邊面板 =====
@@ -781,7 +816,7 @@
     C.TYPE_GROUPS.filter((t) => app.types.has(t)).forEach((t) => add(groupChip("型態", t), () => app.types.delete(t)));
     const sourcesDefault = app.sources.size === DEFAULT_SOURCES.length && DEFAULT_SOURCES.every((s) => app.sources.has(s));
     if (app.region === "hualien" && !sourcesDefault) {
-      const text = app.sources.size >= 2 ? "含模擬偵測" : app.sources.size ? `只看${SOURCE_LABEL[[...app.sources][0]]}偵測` : "不看偵測來源";
+      const text = app.sources.size ? `偵測來源：${[...app.sources].map((s) => SOURCE_LABEL[s]).join("＋")}` : "不看偵測來源";
       add(text, () => (app.sources = new Set(DEFAULT_SOURCES)));
     }
     if (app.persona === "police" && app.region === "hualien") {

@@ -77,6 +77,12 @@
     },
 
     // 螢幕座標附近最近的點（後畫的在上面，所以從後面找起）；沒有回 null
+    // 點到的位置上所有的點（最上面的排第一個）
+    hitAll(containerPoint, tol) {
+      const list = this._screen;
+      return root.HotRoads.pointsAt(list, containerPoint.x, containerPoint.y, tol).map((k) => this._items[list[k].i]);
+    },
+
     hit(containerPoint, tol) {
       const list = this._screen;
       const k = root.HotRoads.nearestPoint(list, containerPoint.x, containerPoint.y, tol);

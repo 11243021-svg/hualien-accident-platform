@@ -173,12 +173,23 @@
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i];
       const d = Math.hypot(p.x - x, p.y - y);
-      if (d <= p.r + tol && d < bestD) {
+      // 一樣近的時候選後畫的（疊在最上面、眼睛看到的那個，例如死亡事故畫在受傷事故上面）
+      if (d <= p.r + tol && d <= bestD) {
         best = i;
         bestD = d;
       }
     }
     return best;
+  }
+
+  // 點擊位置附近（容許誤差內）的所有點，最上面（後畫）的排第一個；給「這裡有好幾件」的小卡片用
+  function pointsAt(pts, x, y, tol) {
+    const out = [];
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      if (Math.hypot(p.x - x, p.y - y) <= p.r + tol) out.push(i);
+    }
+    return out;
   }
 
   function circleRadius(value, maxValue) {
@@ -265,7 +276,7 @@
 
   const api = {
     TIERS, METRIC_LABEL, extractRoad, normRoad, roadBase, roadKey, spotOf, spotsText, annotateAccidents, annotateDetections,
-    metricValue, tierOf, aggregateRoads, circleRadius, roadLimit, visibleRoads, zoomScale, spotScale, nearestPoint, matchRoad, noResultText, towns, villages, dataYears, inLastYears, comparePrev,
+    metricValue, tierOf, aggregateRoads, circleRadius, roadLimit, visibleRoads, zoomScale, spotScale, nearestPoint, pointsAt, matchRoad, noResultText, towns, villages, dataYears, inLastYears, comparePrev,
     inPeriodYears, compareYear, denseBounds,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

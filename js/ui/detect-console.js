@@ -135,16 +135,39 @@
 
       // ===== ③ 開始偵測 =====
       const s3 = step(3, "開始偵測", "按下去後 AI 會一直監看這支監視器，直到按「停止偵測」。");
+      const stayBox = UI.el("div", "dstay");
+      stayBox.append(UI.el("span", "dstay__label", "停留幾秒算異常："));
+      const stayInput = UI.el("input", "auth__input dstay__input");
+      stayInput.type = "number";
+      stayInput.min = "3";
+      stayInput.max = "600";
+      stayInput.step = "1";
+      stayInput.value = "15";
+      stayInput.setAttribute("aria-label", "停留幾秒算異常");
+      const stayPresets = [["展示 5 秒", 5], ["測試 15 秒", 15], ["正式 30 秒", 30], ["長紅燈 60 秒", 60]].map(([t, v]) => {
+        const b = button(t, "dstay__preset", () => { stayInput.value = String(v); renderButtons(); });
+        b.dataset.value = String(v);
+        return b;
+      });
+      stayBox.append(stayInput, UI.el("span", null, "秒"), ...stayPresets);
+      const stayNote = UI.el("p", "dstep__note", "車輛或物體在圍籬內停超過這個秒數就紀錄。每個路口紅燈秒數不同：圍籬有包到停止線前面時，秒數要比紅燈長，不然等紅燈的車都會被記到；展示時間不夠可以設短，但圍籬只圍路肩或路段中間。");
+      stayInput.addEventListener("input", () => renderButtons());
+      const testWrap = UI.el("label", "chk");
+      const testChk = UI.el("input");
+      testChk.type = "checkbox";
+      testChk.checked = true;
+      testWrap.append(testChk, document.createTextNode(" 這次是測試（紀錄存成「測試資料」，不算正式資料，地圖預設不顯示、不發 LINE）"));
       const lineWrap = UI.el("label", "chk");
       const lineChk = UI.el("input");
       lineChk.type = "checkbox";
-      lineWrap.append(lineChk, document.createTextNode(" 偵測到異常時同時發 LINE 通報給團隊（測試時建議不要勾）"));
+      lineWrap.append(lineChk, document.createTextNode(" 偵測到異常時同時發 LINE 通報給團隊（測試時不會發）"));
+      testChk.addEventListener("change", () => renderButtons());
       const startBtn = button("▶ 開始偵測", "auth__btn auth__btn--main dstart", () => start());
       const stopBtn = button("■ 停止偵測", "pop__danger dstop", () => stop());
       const startWhy = UI.el("p", "dstep__why");
       const s3btns = UI.el("div", "dbtns");
       s3btns.append(startBtn, stopBtn);
-      s3.body.append(lineWrap, s3btns, startWhy);
+      s3.body.append(stayBox, stayNote, testWrap, lineWrap, s3btns, startWhy);
 
       // ===== ④ 觀察 ⑤ 紀錄 =====
       const s4 = step("4・5", "觀察與自動紀錄", "畫面上的框框是 AI 認出來的車輛或物體；圍籬顏色代表目前狀況。停超過 15 秒會自動紀錄（寫進資料庫、存截圖），不用另外按。");
@@ -188,6 +211,8 @@
           s = null;
         }
         st.status = s;
+        if (s && s.running && s.stay) stayInput.value = String(s.stay);
+        if (s && s.running) testChk.checked = !!s.test;
         st.models = s ? s.models : "";
         const wasRunning = st.running;
         st.running = !!(s && s.running);
@@ -238,12 +263,23 @@
         undo.disabled = locked || !st.points.length;
         clear.disabled = locked || !st.points.length;
         reload.disabled = !st.camera;
-        lineChk.disabled = st.running;
+        lineChk.disabled = st.running || testChk.checked;
+        testChk.disabled = st.running;
+        stayInput.disabled = st.running;
+        stayPresets.forEach((b) => {
+          b.disabled = st.running;
+          b.classList.toggle("is-on", b.dataset.value === String(Number(stayInput.value)));
+        });
+        const stay = Number(stayInput.value);
+        if (!st.running && check.ok && !(stay >= 3 && stay <= 600)) {
+          startBtn.disabled = true;
+          startWhy.textContent = "停留秒數要填 3～600 秒";
+        }
         fenceInfo.textContent = st.points.length ? `已點 ${st.points.length} 個點${st.points.length < 3 ? "（至少要 3 個）" : ""}` : "";
       }
       function renderLiveState() {
         const s = st.status;
-        liveCam.textContent = st.running && s && s.camera ? `即時畫面：${s.camera.name}` : "";
+        liveCam.textContent = st.running && s && s.camera ? `即時畫面：${s.camera.name}｜停 ${s.stay} 秒算異常${s.test ? "｜測試中（存成測試資料）" : ""}` : "";
         if (!st.running || !s) {
           liveState.textContent = "";
           return;
@@ -293,7 +329,9 @@
           await D().start({
             camera: { id: cam.id, name: cam.name, url: cam.liveUrl, lat: cam.lat, lon: cam.lon },
             fence: st.points,
-            line: lineChk.checked,
+            line: lineChk.checked && !testChk.checked,
+            stay: Number(stayInput.value),
+            test: testChk.checked,
           });
           await refreshStatus();
           live.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -341,7 +379,7 @@
           img.src = D().shotUrl(it.shot);
           const text = UI.el("div", "dsession__text");
           text.append(
-            UI.el("strong", null, `${it.kindLabel}・信心 ${Math.round(it.confidence * 100)}%`),
+            UI.el("strong", null, `${it.test ? "［測試］" : ""}${it.kindLabel}・信心 ${Math.round(it.confidence * 100)}%`),
             UI.el("span", null, time(it.ts)),
             UI.el("span", null, it.camera),
           );
@@ -368,7 +406,7 @@
         list.slice(0, 20).forEach((ev) => {
           const tr = UI.el("tr");
           const filled = ev.deaths != null || ev.injuries != null || ev.cause;
-          [time(ev.ts), opts.kindLabel(ev.kind), ev.source === "real" ? "真實" : "模擬",
+          [time(ev.ts), opts.kindLabel(ev.kind), { real: "真實", sim: "模擬", test: "測試" }[ev.source] || ev.source,
             filled ? `死 ${ev.deaths ?? "—"}／傷 ${ev.injuries ?? "—"}${ev.cause ? "／" + ev.cause : ""}` : "等交通警察隊補填"]
             .forEach((v) => tr.append(UI.el("td", null, v)));
           tbody.append(tr);

@@ -583,3 +583,24 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 @keyframes det-blink { 50% { opacity: 0.25; } }
 .cam-icon.is-detecting { box-shadow: 0 0 0 3px #ff4d4d, 0 0 0 7px rgba(255, 77, 77, 0.35); }
 @media (prefers-reduced-motion: reduce) { .map-detecting.is-on .map-detecting__dot { animation: none; } }
+
+/* AI 偵測選的監視器：紫色（跟車禍點的紅黃、AI 偵測點的藍綠、其他監視器的綠色分開） */
+.cam-icon.is-picked { background-color: #9b5de5; border-color: #fff; }
+.cam-icon.is-picked.is-detecting { box-shadow: 0 0 0 3px #9b5de5, 0 0 0 8px rgba(155, 93, 229, 0.4); animation: cam-pulse 1.4s infinite; }
+@keyframes cam-pulse { 50% { box-shadow: 0 0 0 3px #9b5de5, 0 0 0 12px rgba(155, 93, 229, 0.1); } }
+@media (prefers-reduced-motion: reduce) { .cam-icon.is-picked.is-detecting { animation: none; } }
+.map-detecting.is-on { border-color: #9b5de5; background: rgba(155, 93, 229, 0.12); }
+.map-detecting.is-on .map-detecting__dot { background: #9b5de5; }
+/* 好幾個車禍點疊在一起的小卡片 */
+.pop-stack__bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line-2); }
+.pop-stack__label { flex: 1; font-size: 0.82rem; color: var(--text-mut); text-align: center; }
+.pop-stack__btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font-size: 1.1rem; cursor: pointer; }
+/* AI 偵測：停留秒數 */
+.dstay { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.dstay__label { font-weight: 700; }
+.dstay__input { width: 90px; }
+.dstay__preset { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font: inherit; font-size: 0.85rem; cursor: pointer; }
+.dstay__preset.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.dstay__preset:disabled { opacity: 0.5; cursor: default; }
+.legend__num { display: inline-grid; place-items: center; min-width: 16px; height: 16px; border-radius: 999px; background: #ff4d4d; color: #fff; font-size: 10px; font-weight: 700; }
+.legend__dot--test { background: rgba(154, 165, 177, 0.45); border: 2px dotted #9aa5b1; }
