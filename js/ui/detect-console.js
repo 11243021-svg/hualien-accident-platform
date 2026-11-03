@@ -26,9 +26,10 @@
   //         kindLabel(kind), onShowMap(), onRecorded() }
   UI.detectConsole = {
     create(rootEl, opts) {
-      const st = { service: false, models: "", camera: null, points: [], running: false, status: null, shown: false };
+      const st = { service: false, models: "", camera: null, points: [], running: false, status: null, shown: false, health: null };
       let statusTimer = 0;
       let sessionTimer = 0;
+      let healthTimer = 0;
       let lastSessionTop = "";
 
       // ===== 服務狀態列 =====
@@ -46,23 +47,42 @@
       search.placeholder = "搜尋，例如 中正路、台9線、193K";
       const pick = UI.el("select", "fill__input dpick__select");
       pick.size = 6;
+      const healthLine = UI.el("div", "dhealth");
+      const healthText = UI.el("span", "dhealth__text");
+      const showBadWrap = UI.el("label", "chk");
+      const showBad = UI.el("input");
+      showBad.type = "checkbox";
+      showBadWrap.append(showBad, document.createTextNode(" 顯示連不上的監視器"));
+      healthLine.append(healthText, showBadWrap);
+      showBad.addEventListener("change", fillPick);
       const chosen = UI.el("p", "dpick__chosen", "還沒選監視器");
       const busy = UI.el("div", "dbusy");
       busy.hidden = true;
       const busyText = UI.el("p", "dbusy__text");
       const busyStop = button("停止目前的偵測", "pop__danger dstop", () => stop());
       busy.append(busyText, busyStop);
-      s1.body.append(search, pick, chosen, busy);
+      s1.body.append(search, healthLine, pick, chosen, busy);
       function fillPick() {
         const q = search.value.trim();
         const road = (c) => root.HotCameras.roadText(c);
-        const list = opts.cameras().filter((c) => !q || (c.name + c.id + road(c)).includes(q));
+        // 監視器健康檢查（偵測服務一打開就在背景查）：連得上的排前面，連不上的排最後、變灰色、預設藏起來
+        const bad = new Set((st.health && st.health.bad) || []);
+        const all = opts.cameras();
+        const list = all.filter((c) => !q || (c.name + c.id + road(c)).includes(q))
+          .filter((c) => showBad.checked || !bad.has(c.id) || (st.camera && st.camera.id === c.id));
+        list.sort((a, b) => bad.has(a.id) - bad.has(b.id));
         pick.replaceChildren();
         list.slice(0, 300).forEach((c) => {
-          const o = UI.el("option", null, road(c) ? `${c.name}｜${road(c)}` : c.name);
+          const off = bad.has(c.id);
+          const o = UI.el("option", off ? "is-off" : null, (road(c) ? `${c.name}｜${road(c)}` : c.name) + (off ? "（目前連不上）" : ""));
           o.value = c.id;
           pick.append(o);
         });
+        const h = st.health;
+        healthText.textContent = !st.service ? `共 ${all.length} 支公路局監視器`
+          : !h || !h.checkedAt ? `共 ${all.length} 支公路局監視器（正在檢查哪些連得上，大約 1 分鐘…）`
+            : `共 ${all.length} 支，其中 ${all.length - bad.size} 支可以用、${bad.size} 支目前連不上（${h.checkedAt.slice(11, 16)} 檢查${h.checking ? "，正在重新檢查…" : ""}）`;
+        showBadWrap.hidden = !bad.size;
         if (st.camera) pick.value = st.camera.id;
       }
       search.addEventListener("input", fillPick);
@@ -93,7 +113,10 @@
       snap.addEventListener("error", () => {
         if (!snap.getAttribute("src")) return;
         stageMsg.hidden = false;
-        stageMsg.textContent = st.service ? "這支監視器目前連不上，換一支試試，或按「重新抓畫面」" : "偵測服務沒開，抓不到畫面";
+        const off = st.health && st.health.bad && st.camera && st.health.bad.includes(st.camera.id);
+        stageMsg.textContent = !st.service ? "偵測服務沒開，抓不到畫面"
+          : off ? "這支監視器目前連不上（公路局維修或暫停服務），請換一支"
+            : "這支監視器目前連不上，換一支試試，或按「重新抓畫面」";
       });
       canvas.addEventListener("click", (e) => {
         if ((st.running && sameAsRunning()) || !snap.naturalWidth) return;
@@ -202,6 +225,17 @@
       rootEl.replaceChildren(banner, intro, s1.box, s2.box, s3.box, s4.box, s6.box, s7.box);
 
       // ===== 狀態 =====
+      async function refreshHealth() {
+        try {
+          const h = await D().health();
+          const changed = JSON.stringify(h) !== JSON.stringify(st.health);
+          st.health = h;
+          if (changed) fillPick();
+        } catch {
+          /* 服務沒開：清單照樣顯示全部 */
+        }
+      }
+
       async function refreshStatus() {
         let s;
         try {
@@ -443,6 +477,9 @@
             if (st.camera && !snap.getAttribute("src")) loadSnapshot();
           });
           refreshSession();
+          refreshHealth();
+          clearInterval(healthTimer);
+          healthTimer = setInterval(() => document.visibilityState === "visible" && refreshHealth(), 15000);
           clearInterval(statusTimer);
           clearInterval(sessionTimer);
           statusTimer = setInterval(() => document.visibilityState === "visible" && refreshStatus(), 2000);
@@ -453,6 +490,7 @@
           st.shown = false;
           clearInterval(statusTimer);
           clearInterval(sessionTimer);
+          clearInterval(healthTimer);
           live.removeAttribute("src"); // 切走就不收即時畫面（偵測主機照樣繼續偵測）
           live.hidden = true;
           liveEmpty.hidden = false;

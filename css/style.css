@@ -610,3 +610,6 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .dline--cooldown, .dline--sending { color: var(--text-mut); }
 .dline__note:empty { display: none; }
 .dsession > .dstep__note { grid-column: 1 / -1; }
+.dhealth { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--text-mut); font-size: 0.85rem; }
+.dhealth label[hidden] { display: none; }
+.dpick__select option.is-off { color: var(--text-dim); }

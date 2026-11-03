@@ -55,6 +55,7 @@
     normPoint,
     canStart,
     status: () => request("/api/status", { timeout: 2500 }),
+    health: () => request("/api/health", { timeout: 2500 }),
     start: (body) => post("/api/start", body, 15000),
     stop: () => post("/api/stop", {}, 15000),
     session: () => request("/api/session").then((b) => b.items || []),
