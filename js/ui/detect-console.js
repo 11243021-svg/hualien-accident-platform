@@ -179,11 +179,11 @@
       const testChk = UI.el("input");
       testChk.type = "checkbox";
       testChk.checked = true;
-      testWrap.append(testChk, document.createTextNode(" 這次是測試（紀錄存成「測試資料」，不算正式資料，地圖預設不顯示、不發 LINE）"));
+      testWrap.append(testChk, document.createTextNode(" 這次是測試（紀錄存成「測試資料」，不算正式資料，地圖預設不顯示、不發通報）"));
       const lineWrap = UI.el("label", "chk");
       const lineChk = UI.el("input");
       lineChk.type = "checkbox";
-      lineWrap.append(lineChk, document.createTextNode(" 偵測到異常時同時發 LINE 通報給團隊"));
+      lineWrap.append(lineChk, document.createTextNode(" 偵測到異常時同時發通報（LINE／Telegram）給團隊"));
       const lineNote = UI.el("p", "dstep__note dline__note");
       testChk.addEventListener("change", () => renderButtons());
       const startBtn = button("▶ 開始偵測", "auth__btn auth__btn--main dstart", () => start());
@@ -298,15 +298,15 @@
         undo.disabled = locked || !st.points.length;
         clear.disabled = locked || !st.points.length;
         reload.disabled = !st.camera;
-        // LINE 能不能發：偵測主機要有 LINE 金鑰；勾了「這次是測試」就不發
+        // 通報能不能發：偵測主機要有 LINE 或 Telegram 金鑰；勾了「這次是測試」就不發
         const lineReady = !!(st.status && st.status.lineReady);
         lineChk.disabled = st.running || testChk.checked || !lineReady;
         if (!lineReady) lineChk.checked = false;
         const mins = Math.round(((st.status && st.status.lineCooldown) || 300) / 60);
         lineNote.textContent = !st.service ? ""
-          : !lineReady ? "⚠ 偵測主機還沒設定 LINE（專案資料夾的 .env 沒有 LINE 金鑰），所以不能發 LINE。"
-            : testChk.checked ? "勾了「這次是測試」就不會發 LINE；要發的話先把測試的勾拿掉。"
-              : `LINE 免費方案每月只能發 200 則：同一支監視器 ${mins} 分鐘內最多發 1 則（資料庫照樣每筆都記）。`;
+          : !lineReady ? "⚠ 偵測主機還沒設定通報（專案資料夾的 .env 沒有 LINE 或 Telegram 金鑰），所以不能發通報。"
+            : testChk.checked ? "勾了「這次是測試」就不會發通報；要發的話先把測試的勾拿掉。"
+              : `會發到：${((st.status && st.status.channels) || []).join("、") || "LINE"}。同一支監視器 ${mins} 分鐘內最多發 1 則（LINE 免費方案每月 200 則；資料庫照樣每筆都記）。`;
         testChk.disabled = st.running;
         stayInput.disabled = st.running;
         stayPresets.forEach((b) => {
@@ -434,7 +434,7 @@
             UI.el("span", null, time(it.ts)),
             UI.el("span", null, it.camera),
           );
-          const LINE_TEXT = { sent: "已發 LINE", sending: "LINE 發送中…", failed: "LINE 發送失敗", cooldown: `LINE 冷卻中（${Math.round(((st.status && st.status.lineCooldown) || 300) / 60)} 分鐘內已發過）`, not_ready: "沒設定 LINE，沒發" };
+          const LINE_TEXT = { sent: "已發通報", sending: "通報發送中…", failed: "通報發送失敗", cooldown: `通報冷卻中（${Math.round(((st.status && st.status.lineCooldown) || 300) / 60)} 分鐘內已發過）`, not_ready: "沒設定通報，沒發" };
           if (LINE_TEXT[it.line]) text.append(UI.el("span", "dline dline--" + it.line, LINE_TEXT[it.line]));
           card.append(img, text);
           return card;
