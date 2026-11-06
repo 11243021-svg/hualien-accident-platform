@@ -131,6 +131,7 @@
         result.append(UI.el("p", "route__meta", `起點：${r.a.label || "起點"}　→　終點：${r.b.label || "終點"}`));
         result.append(UI.el("p", "route__sum", R.summaryText(h, ctx.periodLabel())));
         result.append(UI.el("p", "route__meta", `開車約 ${r.km} 公里、${r.minutes} 分鐘；紅色＝這條路上車禍特別密集的路段`));
+        if (ctx.safety) UI.safetyLines(result, h.points, ctx.safety());
         if (h.top.length) {
           result.append(UI.el("h3", "search__h", "沿路最常出事的地點"));
           const ol = UI.el("ol", "route__list");

@@ -53,7 +53,7 @@
     accView: "spot", // 車禍呈現方式：spot＝斑點圖（每件事故一個點，預設）、heat＝熱度圖
   };
   const data = { accidents: { hualien: null, tainan: null }, detections: [], detError: null };
-  let map, heatLayer, accLayer, roadLayer, detLayer, cameraLayer, legend, sheet, hourChart, causeChart;
+  let map, heatLayer, accLayer, roadLayer, detLayer, cameraLayer, weatherLayer, legend, sheet, hourChart, causeChart;
   let view = null;
   const PANES = {};
   let playTimer = null;
@@ -145,6 +145,7 @@
     return app.sources.has(ev.source) &&
       (!police || (app.kinds.has(ev.kind) && (app.fill === "all" || (app.fill === "pending") === D.isPending(ev)))) &&
       inTime(ev) &&
+      (!app.weathers.size || app.weathers.has(ev.weatherG)) &&
       (!app.town || ev.town === app.town) &&
       (!app.village || ev.village === app.village) &&
       (!app.query || R.matchRoad(ev, app.query));
@@ -170,7 +171,16 @@
     const routeBase = accAll.filter((ev) => app.severities.has(ev.severity) &&
       (!app.weathers.size || app.weathers.has(ev.weatherG)) && (!app.types.size || app.types.has(ev.typeG)));
     const accRoute = (useYears ? routeBase.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : routeBase).filter(inTime);
-    return { span, acc, det, roads, hourBase: accNoTime, compare, accRoute };
+    // 道路安全指數：件數、嚴重程度跟著目前篩選；趨勢用「不受期間篩選」的資料比近一年 vs 前一年
+    const safety = window.HotSafety.scoreRoads(acc, base.filter(inTime), lastAccidentTs(accAll));
+    return { span, acc, det, roads, hourBase: accNoTime, compare, accRoute, safety, safetyMap: new Map(safety.map((r) => [r.key, r])) };
+  }
+
+  // 這個地區車禍資料的最後一筆時間（安全指數算趨勢用；每個地區只算一次）
+  const lastTsCache = new Map();
+  function lastAccidentTs(list) {
+    if (!lastTsCache.has(list)) lastTsCache.set(list, list.reduce((m, e) => (e.ts > m ? e.ts : m), ""));
+    return lastTsCache.get(list);
   }
 
   // ===== 地圖 =====
@@ -223,6 +233,7 @@
       onDetect: (cam) => openDetect(cam),
     });
     legend = UI.legend.create(map);
+    weatherLayer = UI.weather.create(map, openPopup);
     sheet = UI.mapSheet.create(map);
     // 手機資料卡：點地圖空白處就收起來（跟電腦版小卡片一樣）
     map.on("preclick", () => sheet.close());
@@ -240,6 +251,7 @@
     }
     bindSpotEvents();
     map.on("moveend", () => view && drawCameras());
+    map.on("moveend", () => weatherLayer.redraw());
     map.on("zoomend", () => view && drawRoads());
     const v = VIEW[app.region];
     map.setView([v[0], v[1]], v[2]);
@@ -296,6 +308,7 @@
       ["種類", F.KIND_LABEL[ev.kind]],
       ["地址", D.shortAddress(ev)],
       ["GPS", `${ev.lat.toFixed(6)}, ${ev.lon.toFixed(6)}`],
+      ...(D.weatherText(ev) ? [["天氣", D.weatherText(ev)]] : []),
       ...(cam ? [["監視器", cam]] : []),
       ...(ev.place && !cam && ev.place !== D.shortAddress(ev) && !/^\d+號,/.test(ev.place) ? [["攝影機地點", ev.place]] : []),
       ...(persona().showConfidence ? [["信心分數", Math.round(ev.confidence * 100) + "%"]] : []),
@@ -427,6 +440,12 @@
     if (!view) return;
     // 斑點圖：每件事故一個點（縮小也畫）；熱度圖：縮小時畫熱度雲，放大到街道或查詢結果不多才畫點
     const zoom = map.getZoom();
+    if (app.accView === "safety") { // 安全指數畫面只畫路段圓圈，車禍點不畫（不然太擠）
+      heatLayer.setLatLngs([]);
+      map.removeLayer(accLayer);
+      accDrawn = null;
+      return;
+    }
     const spot = app.accView === "spot";
     const showPts = spot || zoom >= POINTS_ZOOM || (!!app.query && view.acc.length <= SEARCH_POINTS_MAX);
     // 資料、縮放、身分、選取的路段都沒變就不用重算（平移地圖由斑點圖層自己重畫）
@@ -501,8 +520,97 @@
     detLayer.eachLayer((l) => l instanceof L.Path && l.bringToFront());
   }
 
+  const legendState = () => ({
+    persona: app.persona, metric: app.metric, region: app.region, accView: app.accView,
+    weather: $("weatherToggle").checked && app.region === "hualien",
+  });
+
+  // ===== 道路安全指數 =====
+  const SAFETY_COLOR = { danger: "#5a189a", warn: "#9d4edd", safe: "#e0aaff" };
+  const SAFETY_TEXT = "分數越低越危險：事故件數 40%＋嚴重程度（死亡×10、受傷×1）40%＋近一年趨勢 20%";
+
+  function safetyPopup(r) {
+    const S = window.HotSafety;
+    const box = el("div", "pop");
+    box.append(el("div", "pop__head", `${r.town} ${r.road}`));
+    const big = el("p", `safety-big is-${r.level.key}`);
+    big.append(el("b", null, r.score === null ? "—" : String(r.score)), el("span", null, r.score === null ? "資料不足（少於 3 件）" : ` 分・${r.level.label}`));
+    box.append(big);
+    const dl = el("dl", "pop__rows");
+    const pct = (p) => `${Math.round(p * 100)}%`;
+    [
+      ["出事次數", `${r.count.toLocaleString()} 件${r.parts ? `（比 ${pct(r.parts.count)} 的路段多）` : ""}`],
+      ["嚴重程度", `死亡 ${r.deaths} 人、受傷 ${r.injuries.toLocaleString()} 人`],
+      ["近期趨勢", S.trendText(r.trend)],
+    ].forEach(([k, v]) => dl.append(el("dt", null, k), el("dd", null, v)));
+    box.append(dl, el("p", "pop__note", SAFETY_TEXT));
+    return box;
+  }
+
+  function drawSafety() {
+    const rows = view.safety.filter((r) => r.score !== null);
+    const max = rows.reduce((m, r) => Math.max(m, r.count), 0);
+    const zoom = map.getZoom();
+    const scale = R.zoomScale(zoom);
+    const rankOf = new Map(rows.slice(0, 10).map((r, i) => [r.key, i + 1]));
+    R.visibleRoads(rows, zoom, null).forEach((r) => {
+      const color = SAFETY_COLOR[r.level.key];
+      const m = L.circleMarker([r.lat, r.lon], {
+        ...PANES.road,
+        radius: Math.max(6, Math.round(R.circleRadius(r.count, max) * scale)),
+        color, weight: 1, fillColor: color, fillOpacity: 0.55,
+      });
+      m.bindTooltip(() => el("span", null, `${r.town} ${r.road}：安全指數 ${r.score} 分・${r.level.label}`), TIP_OPTS);
+      m.on("click", () => openPopup(r.lat, r.lon, safetyPopup(r)));
+      m.addTo(roadLayer);
+      const rank = rankOf.get(r.key);
+      if (rank) {
+        const icon = L.divIcon({ className: "road-rank", html: el("span", null, String(rank)), iconSize: [22, 22] });
+        L.marker([r.lat, r.lon], { icon, pane: "rankPane", keyboard: false })
+          .on("click", () => openPopup(r.lat, r.lon, safetyPopup(r)))
+          .addTo(roadLayer);
+      }
+    });
+    restack();
+  }
+
+  // 地圖下方：最危險的前 10 條路段
+  function renderSafetyPanel() {
+    const box = $("safetyPanel");
+    box.hidden = app.accView !== "safety";
+    if (box.hidden || !view) return;
+    const rows = view.safety.filter((r) => r.score !== null).slice(0, 10);
+    box.replaceChildren(el("h2", "safety-panel__title", "道路安全指數排行（最危險前 10 條）"), el("p", "safety-panel__note", SAFETY_TEXT));
+    if (!rows.length) {
+      box.append(el("p", "search__hint", "這個條件下沒有足夠的事故資料（每條路段至少要 3 件才會計算）"));
+      return;
+    }
+    const ol = el("ol", "safety-list");
+    rows.forEach((r, i) => {
+      const b = el("button", "safety-item");
+      b.type = "button";
+      const arrow = r.trend.recent > r.trend.prev ? "↑" : r.trend.recent < r.trend.prev ? "↓" : "→";
+      b.append(
+        el("span", "safety-item__no", String(i + 1)),
+        el("span", "safety-item__name", `${r.town} ${r.road}`),
+        el("span", `safety-item__score is-${r.level.key}`, `${r.score} 分・${r.level.label}`),
+        el("span", "safety-item__sub", `${r.count.toLocaleString()} 件・死亡 ${r.deaths}・受傷 ${r.injuries.toLocaleString()}・趨勢 ${arrow}`),
+      );
+      b.addEventListener("click", () => {
+        map.setView([r.lat, r.lon], Math.max(map.getZoom(), 15));
+        openPopup(r.lat, r.lon, safetyPopup(r));
+        $("map").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      const li = el("li");
+      li.append(b);
+      ol.append(li);
+    });
+    box.append(ol);
+  }
+
   function drawRoads() {
     roadLayer.clearLayers();
+    if (app.accView === "safety") return drawSafety(); // 安全指數畫面：每種身分都看路段安全等級
     if (!persona().layers.roads) return;
     const max = view.roads.reduce((m, r) => Math.max(m, r.value), 0);
     const zoom = map.getZoom();
@@ -647,7 +755,7 @@
     }
     if (vis.panels.searchPanel) {
       const periodLabel = hasYears() ? periodText() : "";
-      UI.search.render($("searchBody"), $("searchTitle"), { query: app.query, acc: view.acc, det: view.det, periodLabel });
+      UI.search.render($("searchBody"), $("searchTitle"), { query: app.query, acc: view.acc, det: view.det, periodLabel, safety: view.safetyMap });
     }
     if (vis.panels.causeBox) {
       const r = A.topCauses(view.acc, 10);
@@ -737,7 +845,8 @@
 
   function loadAccView() {
     try {
-      return window.localStorage.getItem(ACC_VIEW_KEY) === "heat" ? "heat" : "spot";
+      const v = window.localStorage.getItem(ACC_VIEW_KEY);
+      return v === "heat" || v === "safety" ? v : "spot";
     } catch (err) {
       return "spot";
     }
@@ -978,7 +1087,9 @@
     drawRoads();
     drawDetections();
     drawCameras();
-    legend.update({ persona: app.persona, metric: app.metric, region: app.region, accView: app.accView });
+    renderSafetyPanel();
+    legend.update(legendState());
+    weatherLayer.setVisible($("weatherToggle").checked && app.region === "hualien");
     document.querySelectorAll("#accViewSeg button").forEach((b) => setPressed(b, b.dataset.accview === app.accView));
     renderCards();
     renderPanels();
@@ -1361,8 +1472,30 @@
     });
     $("resetBtn").addEventListener("click", resetFilters);
     $("emptyReset").addEventListener("click", resetFilters);
+    // 顯示天氣：記住上次的選擇；打開才去抓（每 10 分鐘更新）
+    const WEATHER_KEY = "hotspot.showWeather";
+    let weatherOn = false;
+    try {
+      weatherOn = window.localStorage.getItem(WEATHER_KEY) === "1";
+    } catch (err) {
+      /* 記不住就預設關閉 */
+    }
+    $("weatherToggle").checked = weatherOn;
+    const applyWeather = () => {
+      weatherLayer.setVisible($("weatherToggle").checked && app.region === "hualien");
+      legend.update(legendState());
+    };
+    $("weatherToggle").addEventListener("change", () => {
+      try {
+        window.localStorage.setItem(WEATHER_KEY, $("weatherToggle").checked ? "1" : "0");
+      } catch (err) {
+        /* 不影響使用 */
+      }
+      applyWeather();
+    });
+    applyWeather();
     $("accViewHelp").addEventListener("click", () =>
-      showToast("斑點圖：一個點＝一件車禍，看得出每件事故的位置。熱度圖：把車禍多的地方畫成一片顏色，越紅＝越密集，適合看整體哪裡最危險。", 8000));
+      showToast("斑點圖：一個點＝一件車禍，看得出每件事故的位置。熱度圖：把車禍多的地方畫成一片顏色，越紅＝越密集。安全指數：每條路段 0～100 分（越低越危險），依事故件數、嚴重程度、近一年趨勢計算，地圖下方有最危險前 10 名。", 10000));
     $("csvBtn").addEventListener("click", downloadCsv);
     $("aiBtn").addEventListener("click", runAiAnalysis);
     $("timeToggle").addEventListener("click", () => {
@@ -1499,6 +1632,7 @@
       layer: routeLayer,
       lineOpts: { pane: "routePane", renderer: L.svg({ pane: "routePane" }) },
       accidents: () => (view ? view.accRoute : []),
+      safety: () => (view ? view.safetyMap : new Map()),
       allAccidents: () => data.accidents.hualien || [],
       cameras: () => CAM.withStats(CAM.ALL, data.detections).filter((c) => c.liveUrl),
       periodLabel: () => (hasYears() ? periodText() : ""),

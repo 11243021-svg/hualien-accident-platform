@@ -33,9 +33,22 @@
       };
       ctl.addTo(map);
       return {
-        update({ persona, metric, region, accView }) {
+        update({ persona, metric, region, accView, weather }) {
           const R = root.HotRoads;
           box.replaceChildren(UI.el("div", "legend__title", "圖例"));
+          if (accView === "safety") {
+            box.append(UI.el("div", "legend__sub", "道路安全指數（每條路段 0～100 分）"));
+            box.append(row(dot("#5a189a"), "危險（0～39 分）"));
+            box.append(row(dot("#9d4edd"), "注意（40～69 分）"));
+            box.append(row(dot("#e0aaff"), "安全（70～100 分）"));
+            box.append(UI.el("div", "legend__note", "圓圈越大＝事故越多；數字＝最危險名次"));
+            box.append(UI.el("div", "legend__note", "少於 3 件的路段資料不足，不顯示"));
+          }
+          if (weather) {
+            box.append(UI.el("div", "legend__sub", "即時天氣（中央氣象署）"));
+            box.append(UI.el("div", "legend__note", "圖示＝天氣、數字＝氣溫；放大地圖會出現更多測站"));
+          }
+          if (accView === "safety") return;
           if (persona === "mayor") {
             const [high, mid, low] = R.TIERS[metric];
             const unit = metric === "count" ? "件" : "人";

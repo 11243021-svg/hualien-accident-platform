@@ -9,7 +9,7 @@
     const tryColumns = (i) =>
       fetchAllRows(cfg.tables.detections, D.COLUMN_SETS[i], "id").catch((err) => {
         if (!/does not exist/.test(err.message) || i + 1 >= D.COLUMN_SETS.length) throw err;
-        console.warn("資料庫還沒有最新欄位（請執行 supabase/002_police_fill.sql、003_roles.sql）");
+        console.warn("資料庫還沒有最新欄位（請執行 supabase 資料夾裡還沒跑過的 SQL，例如 010_detection_weather.sql）");
         return tryColumns(i + 1);
       });
     return tryColumns(0)
@@ -314,6 +314,20 @@
   };
 
   // AI 轄區分析：交給 Supabase Edge Function ai-analysis 轉問 Gemini（金鑰在後台，網頁看不到）
+  // 即時天氣：Supabase Edge Function（裡面轉接中央氣象署，授權碼放在 Secrets，不會出現在網頁）
+  const weather = {
+    async load() {
+      const cfg = root.HOT_CONFIG;
+      const fn = cfg.weatherFunction || "weather";
+      const res = await fetch(`${cfg.supabaseUrl}/functions/v1/${fn}`, {
+        headers: { apikey: cfg.supabaseAnonKey, Authorization: `Bearer ${cfg.supabaseAnonKey}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `天氣資料暫時無法取得（${res.status}）`);
+      return body;
+    },
+  };
+
   const ai = {
     async analyze(stats) {
       const fn = root.HOT_CONFIG.aiFunction || "ai-analysis";
@@ -331,5 +345,5 @@
     },
   };
 
-  root.HotData = { loadEvents, loadAccidents, fetchAllRows, subscribeEvents, auth, admin, route, ai };
+  root.HotData = { loadEvents, loadAccidents, fetchAllRows, subscribeEvents, auth, admin, route, ai, weather };
 })(this);

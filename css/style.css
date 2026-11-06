@@ -613,3 +613,30 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .dhealth { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--text-mut); font-size: 0.85rem; }
 .dhealth label[hidden] { display: none; }
 .dpick__select option.is-off { color: var(--text-dim); }
+
+/* ===== 即時天氣 ===== */
+.map-weather { margin-left: 4px; }
+.wx-icon { background: none; border: none; }
+.wx-pin { display: inline-flex; align-items: center; gap: 2px; padding: 2px 7px 2px 4px; border-radius: 999px; background: rgba(16, 21, 29, 0.88); border: 1px solid #5d6b7a; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.wx-pin.is-main { border-color: #8fb8ff; }
+.wx-pin svg { flex: none; }
+
+/* ===== 道路安全指數 ===== */
+.safety-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; display: grid; gap: 8px; }
+.safety-panel[hidden] { display: none; }
+.safety-panel__title { margin: 0; font-size: 1rem; }
+.safety-panel__note { margin: 0; color: var(--text-dim); font-size: 0.82rem; }
+.safety-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.safety-item { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; text-align: left; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--text); font: inherit; cursor: pointer; }
+.safety-item:hover { border-color: #9d4edd; }
+.safety-item__no { grid-row: span 2; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #2b0f45; border: 2px solid #cfa6f0; font-weight: 700; font-size: 0.8rem; }
+.safety-item__name { font-weight: 700; overflow-wrap: anywhere; }
+.safety-item__score { font-weight: 800; white-space: nowrap; }
+.safety-item__sub { grid-column: 2 / 4; color: var(--text-mut); font-size: 0.8rem; }
+.is-danger { color: #c77dff; }
+.is-warn { color: #d9b8ff; }
+.is-safe { color: #f0e0ff; }
+.safety-big { margin: 4px 0 8px; display: flex; align-items: baseline; gap: 4px; }
+.safety-big b { font-size: 2rem; line-height: 1; }
+.safety-big span { font-weight: 700; }
+.safety-lines { margin: 0 0 6px; padding-left: 18px; display: grid; gap: 2px; }

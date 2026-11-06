@@ -2,8 +2,25 @@
 (function (root) {
   const UI = root.HotUI;
   const DAY_MS = 86400000;
+  // 「這條路：注意（安全指數 58 分）」：查到的事故裡最多的前 3 條路段
+  UI.safetyLines = function (bodyEl, acc, safety) {
+    if (!safety || !safety.size) return;
+    const counts = new Map();
+    acc.forEach((e) => e.roadKey && counts.set(e.roadKey, (counts.get(e.roadKey) || 0) + 1));
+    const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => safety.get(k)).filter((r) => r && r.score !== null).slice(0, 3);
+    if (!rows.length) return;
+    bodyEl.append(UI.el("h3", "search__h", "道路安全指數（越低越危險）"));
+    const ul = UI.el("ul", "safety-lines");
+    rows.forEach((r) => {
+      const li = UI.el("li", null, `${r.town} ${r.road}：`);
+      li.append(UI.el("b", `is-${r.level.key}`, `${r.level.label}（${r.score} 分）`));
+      ul.append(li);
+    });
+    bodyEl.append(ul);
+  };
+
   UI.search = {
-    render(bodyEl, titleEl, { query, acc, det, periodLabel }) {
+    render(bodyEl, titleEl, { query, acc, det, periodLabel, safety }) {
       const A = root.HotAccidents;
       const F = root.HotFilters;
       bodyEl.replaceChildren();
@@ -21,6 +38,7 @@
       const injuries = acc.reduce((s, e) => s + (e.injuries || 0), 0);
       bodyEl.append(UI.el("p", "search__big", `${periodLabel}車禍 ${acc.length.toLocaleString()} 件`));
       bodyEl.append(UI.el("p", "search__sub", `死亡 ${deaths} 人、受傷 ${injuries.toLocaleString()} 人`));
+      UI.safetyLines(bodyEl, acc, safety);
       const top = A.topCauses(acc, 3).top;
       if (top.length) {
         bodyEl.append(UI.el("h3", "search__h", "最常見肇因"));

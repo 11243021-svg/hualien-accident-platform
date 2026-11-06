@@ -4,14 +4,18 @@
     "id", "ts", "kind", "lat", "lon", "place", "road", "village", "town", "county", "address",
     "source", "snapshot_path", "confidence", "camera", "deaths", "injuries", "cause",
     "accident_type", "filled_by_name", "filled_at", "dismissed",
+    "weather", "temperature", "precipitation", "weather_station", "weather_obs_time",
   ];
   const FILL_COLUMNS = ["accident_type", "filled_by_name", "filled_at"]; // 002_police_fill.sql 新增的欄位
   const ROLE_COLUMNS = ["dismissed"]; // 003_roles.sql 新增的欄位
+  const WEATHER_COLUMNS = ["weather", "temperature", "precipitation", "weather_station", "weather_obs_time"]; // 010_detection_weather.sql
   // 資料庫還沒跑新 SQL 時，依序退回較少的欄位，地圖照樣能看
+  const BASE = COLUMNS.filter((c) => !WEATHER_COLUMNS.includes(c));
   const COLUMN_SETS = [
     COLUMNS,
-    COLUMNS.filter((c) => !ROLE_COLUMNS.includes(c)),
-    COLUMNS.filter((c) => !ROLE_COLUMNS.includes(c) && !FILL_COLUMNS.includes(c)),
+    BASE,
+    BASE.filter((c) => !ROLE_COLUMNS.includes(c)),
+    BASE.filter((c) => !ROLE_COLUMNS.includes(c) && !FILL_COLUMNS.includes(c)),
   ];
   const TW_OFFSET_MS = 8 * 3600 * 1000;
 
@@ -55,6 +59,10 @@
       filledBy: r.filled_by_name || "",
       filledAt: r.filled_at ? toTaiwanTs(r.filled_at) : null,
       dismissed: r.dismissed === true,
+      weather: r.weather || "",
+      temperature: numOrNull(r.temperature),
+      precipitation: numOrNull(r.precipitation),
+      weatherStation: r.weather_station || "",
     };
   }
 
@@ -63,6 +71,13 @@
     const m = `${ev.place || ""} ${ev.address || ""}`.match(/(?:^|[\s,，])(\d+(?:之\d+)?號)/);
     const road = ev.road && m ? ev.road + m[1] : ev.road;
     return [road, ev.village, ev.town].filter(Boolean).join("，") || ev.address || "";
+  }
+
+  // 「陰有雨 21.0°C（花蓮測站）」；沒有天氣回空字串
+  function weatherText(ev) {
+    const parts = [ev.weather, ev.temperature !== null && ev.temperature !== undefined ? `${Number(ev.temperature).toFixed(1)}°C` : ""].filter(Boolean);
+    if (!parts.length) return "";
+    return parts.join(" ") + (ev.weatherStation ? `（${ev.weatherStation}測站）` : "");
   }
 
   // 待補填：傷亡與肇因都還沒填
@@ -111,6 +126,7 @@
         field("GPS", Number.isFinite(ev.lat) && Number.isFinite(ev.lon) ? `${ev.lat.toFixed(6)}, ${ev.lon.toFixed(6)}` : ""),
         field("地址", addr),
         field("監視器", o.cameraName),
+        ...(weatherText(ev) ? [field("天氣", weatherText(ev))] : []), // 有記到天氣才顯示（舊資料、沒授權碼時不顯示）
         field("截圖", ev.snapshot ? "已上傳" : ""),
         field("信心分數", Number.isFinite(ev.confidence) ? Math.round(ev.confidence * 100) + "%" : ""),
       ],
@@ -130,7 +146,7 @@
   }
 
   const api = {
-    COLUMNS, FILL_COLUMNS, COLUMN_SETS, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
+    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, COLUMN_SETS, weatherText, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotDetections = api;

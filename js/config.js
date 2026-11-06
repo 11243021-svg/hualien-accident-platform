@@ -7,4 +7,6 @@ window.HOT_CONFIG = {
   snapshotBucket: "detection-snapshots",
   // AI 轄區分析的 Edge Function 網址代號（Supabase 後台建立時自動取的，跟顯示名稱 ai-analysis 不一樣）
   aiFunction: "smart-endpoint",
+  // 即時天氣的 Edge Function 網址代號（建立時名稱填 weather；如果後台自動取了別的代號，改這裡）
+  weatherFunction: "weather",
 };

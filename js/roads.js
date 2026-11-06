@@ -67,8 +67,10 @@
   }
 
   function annotateDetections(list) {
+    const W = typeof module !== "undefined" && module.exports ? require("./weather.js") : root.HotWeather;
     list.forEach((ev) => {
       ev.roadKey = roadKey(ev.town, ev.road);
+      ev.weatherG = W ? W.weatherGroupOf(ev.weather) : "未提供"; // 偵測當下天氣 → 跟車禍一樣的天候分組
     });
     return list;
   }
