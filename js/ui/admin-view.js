@@ -1,7 +1,7 @@
 // 系統管理畫面：帳號管理、誤報清單、補填紀錄。資料庫會再核對是不是管理員。
 (function (root) {
   const UI = root.HotUI;
-  const ACTION_LABEL = { fill: "補填", dismiss: "標誤報", restore: "復原" };
+  const ACTION_LABEL = { fill: "補填", dismiss: "標誤報", restore: "復原", verify: "確認 AI" };
   const time = (ts) => (ts ? ts.slice(0, 16).replace("T", " ") : "—");
 
   function block(title, note) {

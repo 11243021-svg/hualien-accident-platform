@@ -38,9 +38,9 @@
           box.replaceChildren(UI.el("div", "legend__title", "圖例"));
           if (accView === "safety") {
             box.append(UI.el("div", "legend__sub", "道路安全指數（每條路段 0～100 分）"));
-            box.append(row(dot("#5a189a"), "危險（0～39 分）"));
-            box.append(row(dot("#9d4edd"), "注意（40～69 分）"));
-            box.append(row(dot("#e0aaff"), "安全（70～100 分）"));
+            box.append(row(dot("#5a189a"), "危險（分數最低的前 10%）"));
+            box.append(row(dot("#9d4edd"), "注意（接下來的 30%）"));
+            box.append(row(dot("#e0aaff"), "安全（其餘 60%）"));
             box.append(UI.el("div", "legend__note", "圓圈越大＝事故越多；數字＝最危險名次"));
             box.append(UI.el("div", "legend__note", "少於 3 件的路段資料不足，不顯示"));
           }

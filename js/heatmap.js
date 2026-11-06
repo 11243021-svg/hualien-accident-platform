@@ -297,6 +297,35 @@
     return box;
   }
 
+  // 交通警察隊看截圖後確認：AI 判斷正確／誤判（用來算 AI 正確率）
+  function verifyBox(ev) {
+    const box = el("div", "verify");
+    box.append(el("p", "verify__q", "看完截圖，AI 這次判斷對嗎？"));
+    const btns = el("div", "verify__btns");
+    const msg = el("p", "pop__note");
+    const make = (correct, text, cls) => {
+      const b = el("button", `verify__btn ${cls}${ev.verdict === (correct ? "correct" : "wrong") ? " is-on" : ""}`, text);
+      b.type = "button";
+      b.addEventListener("click", async () => {
+        btns.querySelectorAll("button").forEach((x) => (x.disabled = true));
+        msg.textContent = "儲存中…";
+        try {
+          const updated = await window.HotData.auth.verify(ev.id, correct);
+          applyUpdate(Object.assign({}, ev, updated || {}));
+          closePopup();
+          showToast(correct ? "已確認：AI 判斷正確" : "已確認：AI 誤判（系統管理員可在誤報清單把它從地圖隱藏）");
+        } catch (err) {
+          msg.textContent = "確認失敗：" + err.message;
+          btns.querySelectorAll("button").forEach((x) => (x.disabled = false));
+        }
+      });
+      return b;
+    };
+    btns.append(make(true, "✓ 判斷正確", "is-ok"), make(false, "✗ 誤判", "is-bad"));
+    box.append(btns, msg);
+    return box;
+  }
+
   function detPopup(ev) {
     const box = el("div", "pop");
     const head = el("div", "pop__head");
@@ -318,6 +347,7 @@
       ["傷亡", ev.deaths === null && ev.injuries === null ? "待補填" : `死亡 ${ev.deaths ?? "—"}、受傷 ${ev.injuries ?? "—"}`],
       ["肇因", ev.cause || "待補填"],
       ["事故型態", ev.accidentType || (ev.filledBy ? "—" : "待補填")],
+      ...(ev.source !== "sim" ? [["AI 判斷", ev.verdict ? `${D.VERDICT_LABEL[ev.verdict]}（${ev.verifiedBy}${ev.verifiedAt ? "・" + ev.verifiedAt.slice(5, 16).replace("T", " ") : ""}）` : "待確認"]] : []),
       ...(ev.filledBy ? [["補填者", D.fillText(ev)]] : []),
     ];
     const section = (title, list, cls) => {
@@ -338,6 +368,7 @@
     } else {
       box.append(el("p", "pop__note", ev.source !== "sim" ? "截圖檔遺失" : "模擬資料，無截圖"));
     }
+    if (app.persona === "police" && ev.source !== "sim" && Roles.canFill(myRole())) box.append(verifyBox(ev));
     if (app.persona === "police") {
       if (Roles.canFill(myRole())) box.append(UI.fillForm(ev, fillCauses(), (v) => saveFill(ev, v)));
       else if (!session) box.append(el("p", "pop__note", "交通警察隊登入後可以在這裡補填傷亡與肇因"));
@@ -527,7 +558,7 @@
 
   // ===== 道路安全指數 =====
   const SAFETY_COLOR = { danger: "#5a189a", warn: "#9d4edd", safe: "#e0aaff" };
-  const SAFETY_TEXT = "分數越低越危險：事故件數 40%＋嚴重程度（死亡×10、受傷×1）40%＋近一年趨勢 20%";
+  const SAFETY_TEXT = "分數越低越危險：事故件數 40%＋嚴重程度（死亡×10、受傷×1）40%＋近一年趨勢 20%。分數最低的前 10% 路段標「危險」，接下來 30% 標「注意」";
 
   function safetyPopup(r) {
     const S = window.HotSafety;
@@ -580,7 +611,7 @@
     box.hidden = app.accView !== "safety";
     if (box.hidden || !view) return;
     const rows = view.safety.filter((r) => r.score !== null).slice(0, 10);
-    box.replaceChildren(el("h2", "safety-panel__title", "道路安全指數排行（最危險前 10 條）"), el("p", "safety-panel__note", SAFETY_TEXT));
+    box.replaceChildren(el("h2", "safety-panel__title", "安全指數排行：最該優先改善的前 10 條"), el("p", "safety-panel__note", SAFETY_TEXT + (app.persona === "mayor" ? "。（右邊的件數排行只看次數；這裡再加上死傷嚴重程度與近一年趨勢）" : "")));
     if (!rows.length) {
       box.append(el("p", "search__hint", "這個條件下沒有足夠的事故資料（每條路段至少要 3 件才會計算）"));
       return;
@@ -741,7 +772,9 @@
     const vis = P.visibility(app.persona);
     Object.entries(vis.panels).forEach(([id, on]) => ($(id).hidden = !on));
     if (vis.panels.rankPanel) {
-      const notes = [`依${R.METRIC_LABEL[app.metric]}排名，列出出事 ${app.minCount} 次以上的 ${view.roads.length} 條路`];
+      // 兩個排行講清楚差別：這裡看「哪裡最常出事」；安全指數再加上嚴重程度與趨勢，看「哪裡最該先改善」
+      $("rankTitle").textContent = `${R.METRIC_LABEL[app.metric]}排行`;
+      const notes = [`看哪裡最常出事：依${R.METRIC_LABEL[app.metric]}排名，列出出事 ${app.minCount} 次以上的 ${view.roads.length} 條路。要排「先改善哪裡」，請切到地圖上方的「安全指數」`];
       if (app.village) notes.push("車禍資料沒有里別，路段以鄉鎮統計；里別只篩選 AI 偵測事件");
       UI.rankings.render($("rankList"), $("rankNote"), view.roads, { metric: app.metric, selectedKey: app.selectedRoadKey, note: notes.join("。") }, pickRoad);
       $("csvBtn").disabled = !view.roads.length;
@@ -750,7 +783,11 @@
       $("aiBtn").disabled = !view.acc.length;
     }
     if (vis.panels.detPanel) {
+      const acc = D.accuracy(data.detections.filter((e) => !e.dismissed || e.verdict));
       $("detNote").textContent = app.region === "hualien" ? `共 ${view.det.length} 筆（最新 20 筆）` : "這個地區沒有 AI 偵測資料";
+      $("detAccuracy").textContent = acc.checked
+        ? `AI 正確率 ${Math.round(acc.rate * 100)}%（交通警察隊已確認 ${acc.checked} 筆，其中 ${acc.correct} 筆正確）`
+        : "AI 正確率：還沒有確認過的紀錄（交通警察隊點偵測事件 → 判斷正確／誤判）";
       UI.detList.render($("detList"), view.det, focusDetection);
     }
     if (vis.panels.searchPanel) {

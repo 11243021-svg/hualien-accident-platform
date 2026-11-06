@@ -5,10 +5,12 @@
   const WEIGHTS = { count: 0.4, severity: 0.4, trend: 0.2 };
   const DEATH_WEIGHT = 10;
   const MIN_COUNT = 3; // 少於 3 件：資料不足，不給分
+  // 等級依「排名」分：分數最低（最危險）的前 10% 才是「危險」、接下來 30% 是「注意」、其餘「安全」。
+  // 不用固定分數切，因為分數是百分位算的，固定切會讓四成路段都變成危險，公路局反而不知道先修哪裡。
   const LEVELS = [
-    { key: "danger", label: "危險", min: 0 },
-    { key: "warn", label: "注意", min: 40 },
-    { key: "safe", label: "安全", min: 70 },
+    { key: "danger", label: "危險", share: 0.1 },
+    { key: "warn", label: "注意", share: 0.3 },
+    { key: "safe", label: "安全", share: 0.6 },
   ];
   const DAY = 86400000;
 
@@ -46,13 +48,14 @@
     return { recent, prev, change: Math.max(-1, Math.min(1, change)) };
   }
 
-  function levelOf(score) {
-    if (score === null || score === undefined) return { key: "none", label: "資料不足" };
-    let lv = LEVELS[0];
-    LEVELS.forEach((l) => {
-      if (score >= l.min) lv = l;
-    });
-    return lv;
+  // 第 rank 名（0 起算，越前面越危險）、共 total 條有分數的路段 → 等級；null 是資料不足
+  function levelOf(rank, total) {
+    if (rank === null || rank === undefined || !total) return { key: "none", label: "資料不足" };
+    const dangerN = Math.max(1, Math.round(total * LEVELS[0].share));
+    const warnN = dangerN + Math.round(total * LEVELS[1].share);
+    if (rank < dangerN) return LEVELS[0];
+    if (rank < warnN) return LEVELS[1];
+    return LEVELS[2];
   }
 
   // accidents：目前篩選後的車禍（算件數、嚴重程度）；trendSource：不受「期間」篩選的車禍（算趨勢）
@@ -97,13 +100,17 @@
       const t = (r.trend.change + 1) / 2;
       const danger = WEIGHTS.count * pc[i] + WEIGHTS.severity * ps[i] + WEIGHTS.trend * t;
       r.score = Math.round(100 * (1 - danger));
-      r.level = levelOf(r.score);
       r.parts = { count: pc[i], severity: ps[i], trend: t };
     });
-    return rows.sort((a, b) => {
+    rows.sort((a, b) => {
       if (a.score === null || b.score === null) return (a.score === null) - (b.score === null) || b.count - a.count;
       return a.score - b.score || b.count - a.count || a.key.localeCompare(b.key);
     });
+    const total = scored.length;
+    rows.forEach((r, i) => {
+      if (r.score !== null) r.level = levelOf(i, total);
+    });
+    return rows;
   }
 
   // 「近一年比前一年 +12 件」這種說明

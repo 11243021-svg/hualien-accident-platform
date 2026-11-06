@@ -114,6 +114,12 @@
       if (error) throw new Error(error.message || "補填失敗");
       return rowToEvent(data);
     },
+    // 確認 AI 判斷：correct=true 判斷正確、false 誤判（交通警察隊、系統管理員）
+    async verify(id, correct) {
+      const { data, error } = await needClient().rpc("verify_detection", { p_id: id, p_correct: correct });
+      if (error) throw new Error(error.message || "確認失敗");
+      return rowToEvent(data);
+    },
     // 標誤報（on=true）／復原（on=false），只有系統管理員能用
     async dismiss(id, on) {
       const { data, error } = await needClient().rpc("dismiss_detection", { p_id: id, p_dismissed: on });

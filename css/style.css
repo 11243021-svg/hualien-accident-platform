@@ -640,3 +640,13 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .safety-big b { font-size: 2rem; line-height: 1; }
 .safety-big span { font-weight: 700; }
 .safety-lines { margin: 0 0 6px; padding-left: 18px; display: grid; gap: 2px; }
+
+/* 確認 AI 判斷 */
+.verify { margin-top: 10px; padding: 10px; border: 1px dashed var(--line-2); border-radius: 8px; display: grid; gap: 6px; }
+.verify__q { margin: 0; font-weight: 700; }
+.verify__btns { display: flex; gap: 8px; }
+.verify__btn { flex: 1; min-height: 38px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+.verify__btn.is-ok.is-on, .verify__btn.is-ok:hover { border-color: #2ee66b; color: #2ee66b; }
+.verify__btn.is-bad.is-on, .verify__btn.is-bad:hover { border-color: #ff4d4d; color: #ff4d4d; }
+.verify__btn:disabled { opacity: 0.6; cursor: wait; }
+.det-accuracy { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); font-weight: 700; font-size: 0.9rem; }

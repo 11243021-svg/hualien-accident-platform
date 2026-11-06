@@ -20,6 +20,7 @@
     const b = before || {};
     const a = after || {};
     if ("dismissed" in a && a.dismissed !== b.dismissed) return a.dismissed ? "標為誤報" : "復原";
+    if ("ai_verdict" in a) return `AI 判斷：${a.ai_verdict === "correct" ? "正確" : "誤判"}${b.ai_verdict && b.ai_verdict !== a.ai_verdict ? "（改判）" : ""}`;
     const parts = FIELDS.filter(([k]) => show(b[k]) !== show(a[k])).map(([k, label]) => {
       if (show(b[k]) === "—") return `${label} ${show(a[k])}`;
       return `${label} ${show(b[k])}→${show(a[k]) === "—" ? "（清空）" : show(a[k])}`;

@@ -5,14 +5,17 @@
     "source", "snapshot_path", "confidence", "camera", "deaths", "injuries", "cause",
     "accident_type", "filled_by_name", "filled_at", "dismissed",
     "weather", "temperature", "precipitation", "weather_station", "weather_obs_time",
+    "ai_verdict", "verified_by_name", "verified_at",
   ];
   const FILL_COLUMNS = ["accident_type", "filled_by_name", "filled_at"]; // 002_police_fill.sql 新增的欄位
   const ROLE_COLUMNS = ["dismissed"]; // 003_roles.sql 新增的欄位
   const WEATHER_COLUMNS = ["weather", "temperature", "precipitation", "weather_station", "weather_obs_time"]; // 010_detection_weather.sql
+  const VERIFY_COLUMNS = ["ai_verdict", "verified_by_name", "verified_at"]; // 011_police_verify.sql
   // 資料庫還沒跑新 SQL 時，依序退回較少的欄位，地圖照樣能看
-  const BASE = COLUMNS.filter((c) => !WEATHER_COLUMNS.includes(c));
+  const BASE = COLUMNS.filter((c) => !WEATHER_COLUMNS.includes(c) && !VERIFY_COLUMNS.includes(c));
   const COLUMN_SETS = [
     COLUMNS,
+    COLUMNS.filter((c) => !VERIFY_COLUMNS.includes(c)),
     BASE,
     BASE.filter((c) => !ROLE_COLUMNS.includes(c)),
     BASE.filter((c) => !ROLE_COLUMNS.includes(c) && !FILL_COLUMNS.includes(c)),
@@ -63,6 +66,9 @@
       temperature: numOrNull(r.temperature),
       precipitation: numOrNull(r.precipitation),
       weatherStation: r.weather_station || "",
+      verdict: r.ai_verdict || "", // correct／wrong／空白＝還沒確認
+      verifiedBy: r.verified_by_name || "",
+      verifiedAt: r.verified_at ? toTaiwanTs(r.verified_at) : null,
     };
   }
 
@@ -79,6 +85,14 @@
     if (!parts.length) return "";
     return parts.join(" ") + (ev.weatherStation ? `（${ev.weatherStation}測站）` : "");
   }
+
+  // AI 正確率：交通警察隊確認過的偵測（真實＋測試，不含模擬）裡，判斷正確的比例
+  function accuracy(list) {
+    const checked = list.filter((e) => e.source !== "sim" && (e.verdict === "correct" || e.verdict === "wrong"));
+    const correct = checked.filter((e) => e.verdict === "correct").length;
+    return { checked: checked.length, correct, wrong: checked.length - correct, rate: checked.length ? correct / checked.length : null };
+  }
+  const VERDICT_LABEL = { correct: "判斷正確", wrong: "誤判" };
 
   // 待補填：傷亡與肇因都還沒填
   const isPending = (ev) => ev.deaths === null && ev.injuries === null && !ev.cause;
@@ -146,7 +160,7 @@
   }
 
   const api = {
-    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, COLUMN_SETS, weatherText, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
+    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotDetections = api;
