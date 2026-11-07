@@ -1,7 +1,7 @@
 // 篩選與統計的純函式：不碰畫面，瀏覽器與 Node 測試共用。
 (function (root) {
   const KINDS = ["car", "moto", "rock", "debris"];
-  const KIND_LABEL = { car: "汽車", moto: "機車", rock: "落石", debris: "障礙物" };
+  const KIND_LABEL = { car: "汽車", moto: "機車", rock: "落石", debris: "坍方／障礙物" }; // debris＝災害模型的 landslide（坍方）
   const PERIODS = {
     dawn: { label: "清晨", start: 5, end: 8 },
     day: { label: "白天", start: 8, end: 17 },
