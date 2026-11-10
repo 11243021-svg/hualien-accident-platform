@@ -93,6 +93,22 @@
     return { checked: checked.length, correct, wrong: checked.length - correct, rate: checked.length ? correct / checked.length : null };
   }
   const VERDICT_LABEL = { correct: "判斷正確", wrong: "誤判" };
+  // 正確率卡片要顯示的文字；確認不到 RELIABLE_MIN 筆時提醒「數字還不夠可靠」
+  const RELIABLE_MIN = 30;
+  function accuracyCard(acc) {
+    if (!acc || !acc.checked) {
+      return { value: "—", correctPct: 0, detail: "還沒有確認過的紀錄", hint: "點偵測事件 → 看截圖 → 按「判斷正確」或「誤判」" };
+    }
+    const pct = Math.round(acc.rate * 100);
+    return {
+      value: `${pct}%`,
+      correctPct: pct,
+      detail: `已確認 ${acc.checked} 筆（正確 ${acc.correct}・誤判 ${acc.wrong}）`,
+      hint: acc.checked < RELIABLE_MIN ? `確認 ${RELIABLE_MIN} 筆以上，數字更可靠（還差 ${RELIABLE_MIN - acc.checked} 筆）` : "",
+    };
+  }
+  // 截圖上每種東西的框標示的文字（偵測程式畫的），確認時告訴大家要看哪個框
+  const BOX_LABEL = { car: "car／bus／truck", moto: "Moto", rock: "rock", debris: "landslide" };
 
   // 待補填：傷亡與肇因都還沒填
   const isPending = (ev) => ev.deaths === null && ev.injuries === null && !ev.cause;
@@ -160,7 +176,7 @@
   }
 
   const api = {
-    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
+    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, accuracyCard, RELIABLE_MIN, BOX_LABEL, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotDetections = api;

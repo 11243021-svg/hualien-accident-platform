@@ -649,7 +649,13 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .verify__btn.is-ok.is-on, .verify__btn.is-ok:hover { border-color: #2ee66b; color: #2ee66b; }
 .verify__btn.is-bad.is-on, .verify__btn.is-bad:hover { border-color: #ff4d4d; color: #ff4d4d; }
 .verify__btn:disabled { opacity: 0.6; cursor: wait; }
-.det-accuracy { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); font-weight: 700; font-size: 0.9rem; }
+/* AI 偵測正確率卡片：跟上面的數字卡同樣式，進度條綠＝正確、紅＝誤判 */
+.acc-card { margin-bottom: 12px; background: var(--accent-soft); }
+.acc-card b { color: var(--accent); font-size: 2rem; }
+.acc-card small { color: var(--text-mut); font-size: 0.82rem; }
+.acc-card__hint { color: #f2b200 !important; }
+.acc-card__bar { height: 10px; border-radius: 999px; background: #ff4d4d; overflow: hidden; }
+.acc-card__ok { display: block; height: 100%; background: #2ee66b; }
 
 /* 截圖放大 */
 .is-zoomable { cursor: zoom-in; }
