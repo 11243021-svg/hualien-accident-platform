@@ -79,8 +79,8 @@
           if (cams && region === "hualien") box.append(row(UI.el("span", "legend__cam", "📷"), cams === "live" ? "公路局監視器（點了看即時路況）" : "攝影機"));
           if (cams === "all" && region === "hualien") {
             const sw = UI.el("i", "legend__dot");
-            sw.style.background = "#9b5de5";
-            box.append(row(sw, "紫色監視器＝AI 偵測選的那台"));
+            sw.style.background = "#38bdf8";
+            box.append(row(sw, "天藍色監視器＝AI 偵測選的那台"));
             box.append(row(UI.el("span", "legend__num", "N"), "紅色數字＝真實偵測件數"));
           }
           if (cams && region === "hualien") box.append(UI.el("div", "legend__note", "放大地圖會出現更多監視器"));

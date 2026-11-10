@@ -84,7 +84,7 @@
     if (!iconCache[key]) {
       const html = real ? `<span class="cam-badge">${num}</span>` : "";
       // 偵測主機正在偵測這台：外圈加紅色脈動，一看就知道是哪一台
-      // AI 偵測選的那台換成紫色（跟地圖上的點、其他監視器分得開）
+      // AI 偵測選的那台換成天藍色（紫色會跟安全指數的紫色圓圈混在一起）
       iconCache[key] = L.divIcon({ className: "cam-icon" + (picked ? " is-picked" : "") + (detecting ? " is-detecting" : ""), html, iconSize: [28, 28] });
     }
     return iconCache[key];

@@ -300,7 +300,10 @@
   // 交通警察隊看截圖後確認：AI 判斷正確／誤判（用來算 AI 正確率）
   function verifyBox(ev) {
     const box = el("div", "verify");
-    box.append(el("p", "verify__q", "看完截圖，AI 這次判斷對嗎？"));
+    // 寫清楚 AI 判斷了什麼，大家標記的標準才一致（算的是「偵測正確率」：圍籬內真的有這個東西停留，不是判斷是不是事故）
+    const claim = el("p", "verify__claim");
+    claim.append("AI 判斷：圍籬內有「", el("b", null, F.KIND_LABEL[ev.kind] || "物體"), "」停留超過設定秒數。");
+    box.append(claim, el("p", "verify__q", "看完截圖，這個判斷對嗎？"));
     const btns = el("div", "verify__btns");
     const msg = el("p", "pop__note");
     const make = (correct, text, cls) => {
@@ -786,8 +789,8 @@
       const acc = D.accuracy(data.detections.filter((e) => !e.dismissed || e.verdict));
       $("detNote").textContent = app.region === "hualien" ? `共 ${view.det.length} 筆（最新 20 筆）` : "這個地區沒有 AI 偵測資料";
       $("detAccuracy").textContent = acc.checked
-        ? `AI 正確率 ${Math.round(acc.rate * 100)}%（交通警察隊已確認 ${acc.checked} 筆，其中 ${acc.correct} 筆正確）`
-        : "AI 正確率：還沒有確認過的紀錄（交通警察隊點偵測事件 → 判斷正確／誤判）";
+        ? `AI 偵測正確率 ${Math.round(acc.rate * 100)}%（交通警察隊已確認 ${acc.checked} 筆，其中 ${acc.correct} 筆正確）`
+        : "AI 偵測正確率：還沒有確認過的紀錄（交通警察隊點偵測事件 → 判斷正確／誤判）";
       UI.detList.render($("detList"), view.det, focusDetection);
     }
     if (vis.panels.searchPanel) {

@@ -584,13 +584,13 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .cam-icon.is-detecting { box-shadow: 0 0 0 3px #ff4d4d, 0 0 0 7px rgba(255, 77, 77, 0.35); }
 @media (prefers-reduced-motion: reduce) { .map-detecting.is-on .map-detecting__dot { animation: none; } }
 
-/* AI 偵測選的監視器：紫色（跟車禍點的紅黃、AI 偵測點的藍綠、其他監視器的綠色分開） */
-.cam-icon.is-picked { background-color: #9b5de5; border-color: #fff; }
-.cam-icon.is-picked.is-detecting { box-shadow: 0 0 0 3px #9b5de5, 0 0 0 8px rgba(155, 93, 229, 0.4); animation: cam-pulse 1.4s infinite; }
-@keyframes cam-pulse { 50% { box-shadow: 0 0 0 3px #9b5de5, 0 0 0 12px rgba(155, 93, 229, 0.1); } }
+/* AI 偵測選的監視器：天藍色（紫色會跟安全指數混在一起；跟車禍點的紅黃、AI 偵測點的藍綠、其他監視器的綠色分開） */
+.cam-icon.is-picked { background-color: #38bdf8; border-color: #fff; }
+.cam-icon.is-picked.is-detecting { box-shadow: 0 0 0 3px #38bdf8, 0 0 0 8px rgba(56, 189, 248, 0.4); animation: cam-pulse 1.4s infinite; }
+@keyframes cam-pulse { 50% { box-shadow: 0 0 0 3px #38bdf8, 0 0 0 12px rgba(56, 189, 248, 0.1); } }
 @media (prefers-reduced-motion: reduce) { .cam-icon.is-picked.is-detecting { animation: none; } }
-.map-detecting.is-on { border-color: #9b5de5; background: rgba(155, 93, 229, 0.12); }
-.map-detecting.is-on .map-detecting__dot { background: #9b5de5; }
+.map-detecting.is-on { border-color: #38bdf8; background: rgba(56, 189, 248, 0.12); }
+.map-detecting.is-on .map-detecting__dot { background: #38bdf8; }
 /* 好幾個車禍點疊在一起的小卡片 */
 .pop-stack__bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line-2); }
 .pop-stack__label { flex: 1; font-size: 0.82rem; color: var(--text-mut); text-align: center; }
@@ -657,3 +657,5 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .img-viewer::backdrop { background: rgba(5, 8, 12, 0.85); }
 .img-viewer__img { display: block; max-width: 96vw; max-height: 88vh; object-fit: contain; border-radius: 8px; background: #000; }
 .img-viewer__hint { margin: 8px 0 0; text-align: center; color: #e6edf3; font-size: 0.9rem; }
+.verify__claim { margin: 0; font-size: 0.9rem; color: var(--text-mut); }
+.verify__claim b { color: var(--text); }
