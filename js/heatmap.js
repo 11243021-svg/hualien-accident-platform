@@ -51,9 +51,10 @@
     selectedRoadKey: null,
     filtersOpen: false, // 「看哪種」預設收起
     accView: "spot", // 車禍呈現方式：spot＝斑點圖（每件事故一個點，預設）、heat＝熱度圖
+    anaTab: "hour", // 事故分析目前看哪一張：hour／week／year／town／cause／type
   };
   const data = { accidents: { hualien: null, tainan: null }, detections: [], detError: null };
-  let map, heatLayer, accLayer, roadLayer, detLayer, cameraLayer, weatherLayer, legend, sheet, hourChart, causeChart;
+  let map, heatLayer, accLayer, roadLayer, detLayer, cameraLayer, weatherLayer, legend, sheet, anaChart;
   let view = null;
   const PANES = {};
   let playTimer = null;
@@ -131,9 +132,10 @@
   }
 
   // ===== 由 app 狀態推導出畫面要用的資料 =====
-  function matchAccident(ev) {
+  // anyTown：鄉鎮比較圖要算全部鄉鎮，不套用鄉鎮篩選
+  function matchAccident(ev, anyTown) {
     return app.severities.has(ev.severity) &&
-      (!app.town || ev.town === app.town) &&
+      (anyTown || !app.town || ev.town === app.town) &&
       (!app.weathers.size || app.weathers.has(ev.weatherG)) &&
       (!app.types.size || app.types.has(ev.typeG)) &&
       (!app.query || R.matchRoad(ev, app.query));
@@ -155,7 +157,7 @@
     const accAll = data.accidents[app.region] || [];
     const span = R.dataYears(accAll);
     const useYears = app.region === "hualien" && span.end !== null;
-    const base = accAll.filter(matchAccident);
+    const base = accAll.filter((ev) => matchAccident(ev));
     const accNoTime = useYears ? base.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : base;
     const acc = accNoTime.filter(inTime);
     const det = app.region === "hualien" ? data.detections.filter(matchDetection) : [];
@@ -173,7 +175,11 @@
     const accRoute = (useYears ? routeBase.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : routeBase).filter(inTime);
     // 道路安全指數：件數、嚴重程度跟著目前篩選；趨勢用「不受期間篩選」的資料比近一年 vs 前一年
     const safety = window.HotSafety.scoreRoads(acc, base.filter(inTime), lastAccidentTs(accAll));
-    return { span, acc, det, roads, hourBase: accNoTime, compare, accRoute, safety, safetyMap: new Map(safety.map((r) => [r.key, r])) };
+    // 事故分析：年度趨勢固定看全部年份（不套期間）；鄉鎮比較固定看全部鄉鎮（不套鄉鎮），其他條件照算
+    const yearBase = base.filter(inTime);
+    const townAll = accAll.filter((ev) => matchAccident(ev, true));
+    const townBase = (useYears ? townAll.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : townAll).filter(inTime);
+    return { span, acc, det, roads, hourBase: accNoTime, yearBase, townBase, compare, accRoute, safety, safetyMap: new Map(safety.map((r) => [r.key, r])) };
   }
 
   // 這個地區車禍資料的最後一筆時間（安全指數算趨勢用；每個地區只算一次）
@@ -611,7 +617,7 @@
       m.addTo(roadLayer);
       const rank = rankOf.get(r.key);
       if (rank) {
-        const icon = L.divIcon({ className: "road-rank", html: el("span", null, String(rank)), iconSize: [22, 22] });
+        const icon = L.divIcon({ className: "road-rank" + UI.medalClass(rank), html: el("span", null, String(rank)), iconSize: [22, 22] });
         L.marker([r.lat, r.lon], { icon, pane: "rankPane", keyboard: false })
           .on("click", () => openPopup(r.lat, r.lon, safetyPopup(r)))
           .addTo(roadLayer);
@@ -633,7 +639,7 @@
     }
     const ol = el("ol", "safety-list");
     rows.forEach((r, i) => {
-      const b = el("button", "safety-item");
+      const b = el("button", "safety-item" + UI.medalClass(i + 1));
       b.type = "button";
       const arrow = r.trend.recent > r.trend.prev ? "↑" : r.trend.recent < r.trend.prev ? "↓" : "→";
       b.append(
@@ -686,7 +692,7 @@
       // 前 10 名在圓圈中間寫名次，對應右邊排行榜
       const rank = rankOf.get(r.key);
       if (rank) {
-        const icon = L.divIcon({ className: "road-rank" + (selected ? " is-on" : ""), html: el("span", null, String(rank)), iconSize: [22, 22] });
+        const icon = L.divIcon({ className: "road-rank" + UI.medalClass(rank) + (selected ? " is-on" : ""), html: el("span", null, String(rank)), iconSize: [22, 22] });
         L.marker([r.lat, r.lon], { icon, pane: "rankPane", interactive: true, keyboard: false })
           .on("click", () => pickRoad(r.key))
           .bindTooltip(() => el("span", null, `${rank}. ${r.town} ${r.road}（${r.count.toLocaleString()} 件）`), TIP_OPTS) // 路名來自外部資料，用 DOM 節點不用字串
@@ -807,30 +813,106 @@
       const periodLabel = hasYears() ? periodText() : "";
       UI.search.render($("searchBody"), $("searchTitle"), { query: app.query, acc: view.acc, det: view.det, periodLabel, safety: view.safetyMap });
     }
-    if (vis.panels.causeBox) {
-      const r = A.topCauses(view.acc, 10);
-      $("causeLead").textContent = r.top.length ? `最常見的原因是「${r.top[0].cause}」（${r.top[0].count.toLocaleString()} 件）。` : "";
-      causeChart.data.labels = r.top.map((x) => x.cause);
-      causeChart.data.datasets[0].data = r.top.map((x) => x.count);
-      causeChart.update();
-      $("causeNote").textContent = r.unknown ? `另有 ${r.unknown.toLocaleString()} 件未提供肇因（110 年官方資料無此欄位）` : "";
-    }
+    if (vis.panels.analysisBox) renderAnalysis();
   }
 
-  function renderHourChart() {
-    const hours = new Array(24).fill(0);
-    view.hourBase.forEach((ev) => (hours[F.hourOf(ev.ts)] += 1));
-    const ds = hourChart.data.datasets[0];
-    ds.data = hours;
-    // 最多的 3 個時段標紅色；選了某個時段時，其他時段變淡
-    const top = window.HotAnalysis.topIndexes(hours, 3);
-    ds.backgroundColor = hours.map((_, h) => {
-      const on = F.isHourHighlighted(h, app.time);
-      if (top.includes(h)) return on ? "#ff4d4d" : "rgba(255,77,77,0.3)";
-      return on ? "#48c3ac" : "rgba(72,195,172,0.22)";
+  // ===== 事故分析：一個框、六個分頁（老師 11/9：管理單位和民眾關心的數據做成圖）=====
+  const ANA_TEAL = "#48c3ac", ANA_RED = "#ff4d4d", ANA_GOLD = "#f5c518";
+  const TICK = { color: "#a2b0c0" };
+  const GRID = { color: "rgba(255,255,255,0.08)" };
+  const shortLabel = (n) => function (v) { const s = this.getLabelForValue(v); return s.length > n ? s.slice(0, n) + "…" : s; };
+  const barChart = (labels, data, colors, horizontal) => ({
+    type: "bar",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 3 }] },
+    options: {
+      indexAxis: horizontal ? "y" : "x",
+      animation: false, responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (item) => `${item.raw.toLocaleString()} 件` } } },
+      scales: horizontal
+        ? { x: { beginAtZero: true, ticks: { ...TICK, precision: 0 }, grid: GRID }, y: { ticks: { ...TICK, font: { size: 11 }, callback: shortLabel(9) }, grid: { display: false } } }
+        : { x: { ticks: TICK, grid: { display: false } }, y: { beginAtZero: true, ticks: { ...TICK, precision: 0 }, grid: GRID } },
+    },
+  });
+
+  // 每個分頁：回傳 { lead（一句結論）, note（註記）, tall（圖要不要高一點）, config（Chart.js 設定）}
+  function analysisSpec(tab) {
+    const AN = window.HotAnalysis;
+    if (tab === "hour") {
+      const hours = new Array(24).fill(0);
+      view.hourBase.forEach((ev) => (hours[F.hourOf(ev.ts)] += 1));
+      const top = AN.topIndexes(hours, 3); // 最多的 3 個時段標紅；選了某個時段時，其他時段變淡
+      const colors = hours.map((_, h) => {
+        const on = F.isHourHighlighted(h, app.time);
+        if (top.includes(h)) return on ? ANA_RED : "rgba(255,77,77,0.3)";
+        return on ? ANA_TEAL : "rgba(72,195,172,0.22)";
+      });
+      return { lead: AN.peakText(hours), note: "紅色＝最多的 3 個時段", config: barChart(hours.map((_, h) => String(h)), hours, colors) };
+    }
+    if (tab === "week") {
+      const c = AN.weekdayCounts(view.acc);
+      const top = AN.topIndexes(c, 1);
+      return { lead: AN.weekdayText(c), note: "紅色＝最多的一天", config: barChart(AN.WEEKDAYS.map((d) => "週" + d), c, c.map((_, i) => (top.includes(i) ? ANA_RED : ANA_TEAL))) };
+    }
+    if (tab === "year") {
+      const rows = AN.yearlyStats(view.yearBase);
+      return {
+        lead: AN.yearlyText(rows),
+        note: "固定顯示全部年份（不受上方「期間」影響）；長條＝事故件數，黃線＝傷亡人數",
+        config: {
+          type: "bar",
+          data: {
+            labels: rows.map((r) => `${r.year - ROC} 年`),
+            datasets: [
+              { type: "bar", label: "事故件數", data: rows.map((r) => r.count), backgroundColor: ANA_TEAL, borderRadius: 3, order: 2 },
+              { type: "line", label: "傷亡人數", data: rows.map((r) => r.casualties), borderColor: "#ffe100", backgroundColor: "#ffe100", pointRadius: 4, tension: 0.2, order: 1 },
+            ],
+          },
+          options: {
+            animation: false, responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: "#c9d4df", boxWidth: 12 } }, tooltip: { callbacks: { label: (item) => `${item.dataset.label} ${item.raw.toLocaleString()}` } } },
+            scales: { x: { ticks: TICK, grid: { display: false } }, y: { beginAtZero: true, ticks: { ...TICK, precision: 0 }, grid: GRID } },
+          },
+        },
+      };
+    }
+    if (tab === "town") {
+      const rows = AN.townCounts(view.townBase);
+      return {
+        lead: AN.townText(rows, app.town),
+        note: app.town ? `固定比較全部鄉鎮；金色＝目前選的「${app.town}」` : "固定比較全部鄉鎮；上方選了鄉鎮，那一條會變金色",
+        tall: true,
+        config: barChart(rows.map((r) => r.town), rows.map((r) => r.count), rows.map((r) => (r.town === app.town ? ANA_GOLD : ANA_TEAL)), true),
+      };
+    }
+    if (tab === "cause") {
+      const r = A.topCauses(view.acc, 10);
+      return {
+        lead: r.top.length ? `最常見的原因是「${r.top[0].cause}」（${r.top[0].count.toLocaleString()} 件）。` : "",
+        note: r.unknown ? `另有 ${r.unknown.toLocaleString()} 件未提供肇因（110 年官方資料無此欄位）` : "",
+        tall: true,
+        config: barChart(r.top.map((x) => x.cause), r.top.map((x) => x.count), ANA_TEAL, true),
+      };
+    }
+    const r = AN.typeCounts(view.acc); // 事故型態
+    return {
+      lead: AN.typeText(r),
+      note: r.unknown ? `另有 ${r.unknown.toLocaleString()} 件未提供事故型態（110 年官方資料無此欄位）` : "",
+      tall: true,
+      config: barChart(r.rows.map((x) => x.type), r.rows.map((x) => x.count), ANA_TEAL, true),
+    };
+  }
+
+  function renderAnalysis() {
+    document.querySelectorAll("#anaTabs button").forEach((b) => {
+      setPressed(b, b.dataset.tab === app.anaTab);
+      b.setAttribute("aria-selected", String(b.dataset.tab === app.anaTab));
     });
-    hourChart.update();
-    $("hourNote").textContent = window.HotAnalysis.peakText(hours);
+    const spec = analysisSpec(app.anaTab);
+    $("anaLead").textContent = spec.lead || "這個條件下沒有資料。";
+    $("anaNote").textContent = spec.note || "";
+    $("anaCanvasBox").classList.toggle("chart-box__canvas--tall", !!spec.tall);
+    if (anaChart) anaChart.destroy(); // 每個分頁的圖種類不同（直條／橫條／長條＋折線），直接重建最單純
+    anaChart = new Chart($("anaChart"), spec.config);
   }
 
   // 分段按鈕：外觀（is-on）和螢幕閱讀器狀態（aria-pressed）一起更新
@@ -1143,7 +1225,6 @@
     document.querySelectorAll("#accViewSeg button").forEach((b) => setPressed(b, b.dataset.accview === app.accView));
     renderCards();
     renderPanels();
-    renderHourChart();
     renderControls();
     const empty = !(view.acc.length > 0 || view.det.length > 0);
     $("emptyHint").hidden = !empty;
@@ -1560,35 +1641,10 @@
   }
 
   function initCharts() {
-    hourChart = new Chart($("hourChart"), {
-      type: "bar",
-      data: { labels: Array.from({ length: 24 }, (_, h) => String(h)), datasets: [{ data: new Array(24).fill(0), backgroundColor: [], borderRadius: 3 }] },
-      options: {
-        animation: false,
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => `${items[0].label}:00`, label: (item) => `${item.raw} 件` } } },
-        scales: {
-          x: { ticks: { color: "#a2b0c0" }, grid: { display: false } },
-          y: { beginAtZero: true, ticks: { color: "#a2b0c0", precision: 0 }, grid: { color: "rgba(255,255,255,0.08)" } },
-        },
-      },
-    });
-    causeChart = new Chart($("causeChart"), {
-      type: "bar",
-      data: { labels: [], datasets: [{ data: [], backgroundColor: "#48c3ac", borderRadius: 3 }] },
-      options: {
-        indexAxis: "y",
-        animation: false,
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => items[0].label, label: (item) => `${item.raw} 件` } } },
-        scales: {
-          x: { beginAtZero: true, ticks: { color: "#a2b0c0", precision: 0 }, grid: { color: "rgba(255,255,255,0.08)" } },
-          y: { ticks: { color: "#a2b0c0", font: { size: 11 }, callback(v) { const s = this.getLabelForValue(v); return s.length > 9 ? s.slice(0, 9) + "…" : s; } }, grid: { display: false } },
-        },
-      },
-    });
+    document.querySelectorAll("#anaTabs button").forEach((b) => b.addEventListener("click", () => {
+      app.anaTab = b.dataset.tab;
+      renderAnalysis();
+    }));
   }
 
   // Realtime 收到新偵測事件：加進清單、重畫、閃一下、跳提示

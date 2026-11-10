@@ -82,7 +82,77 @@
     return values.map((v, i) => [i, v]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, n).map(([i]) => i);
   }
 
-  const api = { buildPayload, parseAnswer, peakText, topIndexes };
+  // ===== 事故分析分頁（老師 11/9：管理單位和民眾關心的數據做成圖）=====
+  const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
+  // 星期分布：[星期一, …, 星期日] 的件數（ts 前 10 碼是日期）
+  function weekdayCounts(list) {
+    const out = new Array(7).fill(0);
+    list.forEach((e) => {
+      const d = new Date(`${String(e.ts).slice(0, 10)}T00:00:00Z`);
+      if (!Number.isNaN(d.getTime())) out[(d.getUTCDay() + 6) % 7] += 1;
+    });
+    return out;
+  }
+  function weekdayText(counts) {
+    const total = counts.reduce((a, b) => a + b, 0);
+    if (!total) return "";
+    const top = counts.indexOf(Math.max(...counts));
+    const wd = counts.slice(0, 5).reduce((a, b) => a + b, 0) / 5;
+    const we = (counts[5] + counts[6]) / 2;
+    const cmp = Math.abs(wd - we) < Math.max(wd, we) * 0.05 ? "平日跟週末差不多" : wd > we ? "平日比週末多" : "週末比平日多";
+    return `最常出事的是星期${WEEKDAYS[top]}（${counts[top].toLocaleString()} 件）；${cmp}。`;
+  }
+
+  // 年度趨勢：[{ year（西元）, count, casualties }]，依年份排序
+  function yearlyStats(list) {
+    const m = new Map();
+    list.forEach((e) => {
+      const y = Number(String(e.ts).slice(0, 4));
+      if (!Number.isFinite(y)) return;
+      const o = m.get(y) || { year: y, count: 0, casualties: 0 };
+      o.count += 1;
+      o.casualties += (e.deaths || 0) + (e.injuries || 0);
+      m.set(y, o);
+    });
+    return [...m.values()].sort((a, b) => a.year - b.year);
+  }
+  function yearlyText(rows) {
+    if (rows.length < 2) return rows.length ? "這個地區只有一年的資料，看不出趨勢。" : "";
+    const n = rows.length;
+    const avg = (k) => Math.round(rows.reduce((s, r) => s + r[k], 0) / n);
+    const first = rows[0].count, last = rows[n - 1].count;
+    const diff = first ? Math.round(((last - first) / first) * 100) : 0;
+    const trend = Math.abs(diff) < 3 ? "跟第一年差不多" : diff > 0 ? `比第一年多 ${diff}%` : `比第一年少 ${-diff}%`;
+    return `近 ${n} 年平均每年 ${avg("count").toLocaleString()} 件、傷亡 ${avg("casualties").toLocaleString()} 人；最近一年${trend}。`;
+  }
+
+  // 鄉鎮比較：[{ town, count }]，件數多的在前（沒有鄉鎮的不算）
+  function townCounts(list) {
+    return sortedEntries(tally(list, (e) => e.town || "")).map(([town, count]) => ({ town, count }));
+  }
+  function townText(rows, selected) {
+    if (!rows.length) return "";
+    let s = `事故最多的是${rows[0].town}（${rows[0].count.toLocaleString()} 件）`;
+    const i = selected ? rows.findIndex((r) => r.town === selected) : -1;
+    if (i > 0) s += `；${selected}排第 ${i + 1} 名（${rows[i].count.toLocaleString()} 件）`;
+    return s + "。";
+  }
+
+  // 事故型態：8 大類件數（「未提供」另外回傳，圖不畫）
+  function typeCounts(list) {
+    const m = tally(list, (e) => e.typeG || "未提供");
+    const unknown = m["未提供"] || 0;
+    delete m["未提供"];
+    return { rows: sortedEntries(m).map(([type, count]) => ({ type, count })), unknown };
+  }
+  function typeText(r) {
+    const total = r.rows.reduce((s, x) => s + x.count, 0);
+    if (!total) return "";
+    const top = r.rows[0];
+    return `最常見的是「${top.type}」（${top.count.toLocaleString()} 件，占 ${Math.round((top.count / total) * 100)}%）。`;
+  }
+
+  const api = { buildPayload, parseAnswer, peakText, topIndexes, WEEKDAYS, weekdayCounts, weekdayText, yearlyStats, yearlyText, townCounts, townText, typeCounts, typeText };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotAnalysis = api;
 })(this);

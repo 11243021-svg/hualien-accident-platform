@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=af308259">
+  <link rel="stylesheet" href="css/style.css?v=f6279dee">
 </head>
 <body>
   <header class="top">
@@ -204,16 +204,19 @@
         <h2 id="searchTitle">查詢路況</h2>
         <div id="searchBody"></div>
       </div>
-      <div class="chart-box">
-        <h2>24 小時分布</h2>
-        <p class="chart-box__lead" id="hourNote"></p>
-        <div class="chart-box__canvas"><canvas id="hourChart"></canvas></div>
-      </div>
-      <div class="chart-box" id="causeBox">
-        <h2>肇因前 10 名</h2>
-        <p class="chart-box__lead" id="causeLead"></p>
-        <div class="chart-box__canvas chart-box__canvas--tall"><canvas id="causeChart"></canvas></div>
-        <p class="chart-box__note" id="causeNote"></p>
+      <div class="chart-box" id="analysisBox" hidden>
+        <h2>事故分析</h2>
+        <div class="ana-tabs" id="anaTabs" role="tablist" aria-label="切換分析圖">
+          <button type="button" data-tab="hour" role="tab">時段</button>
+          <button type="button" data-tab="week" role="tab">星期</button>
+          <button type="button" data-tab="year" role="tab">年度趨勢</button>
+          <button type="button" data-tab="town" role="tab">鄉鎮比較</button>
+          <button type="button" data-tab="cause" role="tab">肇因</button>
+          <button type="button" data-tab="type" role="tab">事故型態</button>
+        </div>
+        <p class="chart-box__lead" id="anaLead"></p>
+        <div class="chart-box__canvas" id="anaCanvasBox"><canvas id="anaChart"></canvas></div>
+        <p class="chart-box__note" id="anaNote"></p>
       </div>
     </aside>
   </main>
@@ -236,23 +239,23 @@
   <script src="js/roads.js?v=b22019ce"></script>
   <script src="js/safety.js?v=51186e4e"></script>
   <script src="js/route.js?v=13dc41dd"></script>
-  <script src="js/analysis.js?v=7870ddeb"></script>
+  <script src="js/analysis.js?v=0ba2e3b5"></script>
   <script src="js/report.js?v=63bd2878"></script>
   <script src="js/categories.js?v=4ac81d98"></script>
-  <script src="js/personas.js?v=4f4936c0"></script>
+  <script src="js/personas.js?v=cc4bfe12"></script>
   <script src="js/roles.js?v=dc9e3676"></script>
   <script src="js/cctv-list.js?v=0fc1b38e"></script>
   <script src="js/cctv-roads.js?v=e227588f"></script>
   <script src="js/cameras.js?v=1d03d02c"></script>
   <script src="js/cache.js?v=68c050c3"></script>
   <script src="js/datasource.js?v=d4bb30de"></script>
-  <script src="js/ui/dom.js?v=11a5aec3"></script>
+  <script src="js/ui/dom.js?v=3bbe77ca"></script>
   <script src="js/ui/image-viewer.js?v=fecf92df"></script>
   <script src="js/ui/legend.js?v=9ce7a18d"></script>
   <script src="js/ui/spot-layer.js?v=5c39563c"></script>
   <script src="js/ui/map-sheet.js?v=0224d1ad"></script>
   <script src="js/ui/weather-layer.js?v=7f4001f8"></script>
-  <script src="js/ui/rankings.js?v=e83a8d42"></script>
+  <script src="js/ui/rankings.js?v=a7a8d6e5"></script>
   <script src="js/ui/detections-list.js?v=54641ca1"></script>
   <script src="js/ui/search-panel.js?v=06fc951a"></script>
   <script src="js/ui/cameras-layer.js?v=b32aa74f"></script>
@@ -265,6 +268,6 @@
   <script src="js/ui/admin-view.js?v=1060fec0"></script>
   <script src="js/detect-client.js?v=40c825a4"></script>
   <script src="js/ui/detect-console.js?v=d842bdb7"></script>
-  <script src="js/heatmap.js?v=cec540a8"></script>
+  <script src="js/heatmap.js?v=48abefda"></script>
 </body>
 </html>

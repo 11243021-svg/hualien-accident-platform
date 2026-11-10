@@ -24,4 +24,6 @@
     return HotUI.isDay(hour) ? shade.day : shade.night;
   };
   HotUI.TEXT_MUT = "#a2b0c0"; // 圖例「真實／模擬」示意用的中性色
+  // 排行前三名：金、銀、銅（老師 11/9：前三名上色）；不用紅黃，避免跟死亡／受傷搞混
+  HotUI.medalClass = (rank) => ["", " is-gold", " is-silver", " is-bronze"][rank] || "";
 })(this);

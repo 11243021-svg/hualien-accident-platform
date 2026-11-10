@@ -12,10 +12,11 @@
       }
       const unit = metric === "count" ? "件" : "人";
       roads.slice(0, 10).forEach((r, i) => {
-        const li = UI.el("li", "rank__item" + (r.key === selectedKey ? " is-on" : ""));
+        const li = UI.el("li", "rank__item" + UI.medalClass(i + 1) + (r.key === selectedKey ? " is-on" : ""));
         const swatch = UI.el("i", "rank__tier");
         swatch.style.background = UI.TIER_COLOR[r.tier] || "transparent";
-        const name = UI.el("span", "rank__name", `${i + 1}. ${r.town} ${r.road}`);
+        const name = UI.el("span", "rank__name");
+        name.append(UI.el("i", "rank__no", String(i + 1)), `${r.town} ${r.road}`);
         const val = UI.el("b", "rank__val", `${r.value.toLocaleString()} ${unit}`);
         const sub = UI.el("span", "rank__sub", `${R.METRIC_LABEL.count} ${r.count.toLocaleString()}・死 ${r.deaths}・傷 ${r.injuries}${r.topCause ? "・" + r.topCause : ""}`);
         const btn = UI.el("button", "rank__btn");
