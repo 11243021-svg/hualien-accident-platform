@@ -364,7 +364,7 @@
       img.alt = "警報截圖";
       img.src = ev.snapshot;
       img.onerror = () => img.replaceWith(el("p", "pop__note", "截圖檔遺失"));
-      box.append(img);
+      box.append(UI.zoomable(img));
     } else {
       box.append(el("p", "pop__note", ev.source !== "sim" ? "截圖檔遺失" : "模擬資料，無截圖"));
     }

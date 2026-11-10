@@ -650,3 +650,10 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .verify__btn.is-bad.is-on, .verify__btn.is-bad:hover { border-color: #ff4d4d; color: #ff4d4d; }
 .verify__btn:disabled { opacity: 0.6; cursor: wait; }
 .det-accuracy { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); font-weight: 700; font-size: 0.9rem; }
+
+/* 截圖放大 */
+.is-zoomable { cursor: zoom-in; }
+.img-viewer { padding: 0; border: 0; background: transparent; max-width: 96vw; max-height: 96vh; cursor: zoom-out; }
+.img-viewer::backdrop { background: rgba(5, 8, 12, 0.85); }
+.img-viewer__img { display: block; max-width: 96vw; max-height: 88vh; object-fit: contain; border-radius: 8px; background: #000; }
+.img-viewer__hint { margin: 8px 0 0; text-align: center; color: #e6edf3; font-size: 0.9rem; }

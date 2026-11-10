@@ -428,6 +428,7 @@
           img.alt = `${it.kindLabel} 截圖`;
           img.loading = "lazy";
           img.src = D().shotUrl(it.shot);
+          UI.zoomable(img);
           const text = UI.el("div", "dsession__text");
           text.append(
             UI.el("strong", null, `${it.test ? "［測試］" : ""}${it.kindLabel}・信心 ${Math.round(it.confidence * 100)}%`),
