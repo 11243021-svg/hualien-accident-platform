@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=f6279dee">
+  <link rel="stylesheet" href="css/style.css?v=0e8abc37">
 </head>
 <body>
   <header class="top">
@@ -174,6 +174,14 @@
         <section class="wcard" id="writeCard" aria-live="polite" aria-label="新偵測事件寫入資料庫" hidden></section>
       </div>
       <section class="safety-panel" id="safetyPanel" hidden aria-label="道路安全指數排行"></section>
+      <div class="panel det-panel" id="detPanel" hidden>
+        <div class="card acc-card" id="detAccuracy"></div>
+        <div class="det-panel__list">
+          <h2>最新偵測事件</h2>
+          <p class="panel__note" id="detNote"></p>
+          <ol class="det" id="detList"></ol>
+        </div>
+      </div>
     </div>
     <aside class="side">
       <div class="cards">
@@ -189,12 +197,6 @@
         </div>
         <p class="panel__note" id="rankNote"></p>
         <ol class="rank" id="rankList"></ol>
-      </div>
-      <div class="panel" id="detPanel" hidden>
-        <div class="card acc-card" id="detAccuracy"></div>
-        <h2>最新偵測事件</h2>
-        <p class="panel__note" id="detNote"></p>
-        <ol class="det" id="detList"></ol>
       </div>
       <div class="panel" id="routePanel" hidden>
         <h2>路線安全</h2>
