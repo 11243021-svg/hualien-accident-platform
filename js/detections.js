@@ -109,6 +109,9 @@
   }
   // 截圖上每種東西的框標示的文字（偵測程式畫的），確認時告訴大家要看哪個框
   const BOX_LABEL = { car: "car／bus／truck", moto: "Moto", rock: "rock", debris: "landslide" };
+  // 2026-11-14 起偵測服務會在每筆截圖用青色粗框標出「本筆」；這之前的舊截圖沒有，只能看種類的框
+  const TARGET_MARK_SINCE = "2026-11-14T22:45";
+  const hasTargetMark = (ev) => String(ev.ts || "") >= TARGET_MARK_SINCE;
 
   // 待補填：傷亡與肇因都還沒填
   const isPending = (ev) => ev.deaths === null && ev.injuries === null && !ev.cause;
@@ -176,7 +179,7 @@
   }
 
   const api = {
-    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, accuracyCard, RELIABLE_MIN, BOX_LABEL, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
+    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, accuracyCard, RELIABLE_MIN, BOX_LABEL, TARGET_MARK_SINCE, hasTargetMark, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotDetections = api;

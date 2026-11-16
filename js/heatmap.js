@@ -320,7 +320,8 @@
     // 寫清楚 AI 判斷了什麼，大家標記的標準才一致（算的是「偵測正確率」：圍籬內真的有這個東西停留，不是判斷是不是事故）
     const claim = el("p", "verify__claim");
     claim.append("AI 判斷：圍籬內有「", el("b", null, F.KIND_LABEL[ev.kind] || "物體"), "」停留超過設定秒數。");
-    if (D.BOX_LABEL[ev.kind]) claim.append("請看截圖中標示「", el("b", null, D.BOX_LABEL[ev.kind]), "」的紅框，其他框是另外的事件。");
+    if (D.hasTargetMark(ev)) claim.append("請看截圖中", el("b", null, "青色粗框、標「本筆」"), "的物體，其他框是另外的事件。");
+    else if (D.BOX_LABEL[ev.kind]) claim.append("請看截圖中標示「", el("b", null, D.BOX_LABEL[ev.kind]), "」的紅框，其他框是另外的事件。");
     box.append(claim, el("p", "verify__q", "看完截圖，這個判斷對嗎？"));
     const btns = el("div", "verify__btns");
     const msg = el("p", "pop__note");
