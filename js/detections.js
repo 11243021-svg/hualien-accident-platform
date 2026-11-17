@@ -109,7 +109,7 @@
   }
   // 截圖上每種東西的框標示的文字（偵測程式畫的），確認時告訴大家要看哪個框
   const BOX_LABEL = { car: "car／bus／truck", moto: "Moto", rock: "rock", debris: "landslide" };
-  // 2026-11-14 起偵測服務會在每筆截圖用青色粗框標出「本筆」；這之前的舊截圖沒有，只能看種類的框
+  // 2026-11-14 起偵測服務會在每筆截圖用紅色粗框標出「本筆」；這之前的舊截圖沒有，只能看種類的框
   const TARGET_MARK_SINCE = "2026-11-14T22:45";
   const hasTargetMark = (ev) => String(ev.ts || "") >= TARGET_MARK_SINCE;
 
