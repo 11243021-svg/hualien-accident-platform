@@ -696,3 +696,12 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .det-panel .acc-card { margin-bottom: 0; }
 .det-panel .det { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); max-height: 360px; }
 @media (max-width: 900px) { .det-panel { grid-template-columns: 1fr; } }
+
+/* 偵測事件清單：只看待確認、顯示更多、AI 判斷狀態 */
+.det-panel__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.det-panel__head h2 { margin: 0; }
+.det-more { margin-top: 8px; width: 100%; }
+.det__verdict { font-size: 0.72rem; color: var(--text-mut); border: 1px solid var(--line-2); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.det__verdict.is-correct { color: #2ee66b; border-color: #2ee66b; }
+.det__verdict.is-wrong { color: #ff4d4d; border-color: #ff4d4d; }
+.det-panel .det__btn { grid-template-columns: auto auto 1fr auto auto; }

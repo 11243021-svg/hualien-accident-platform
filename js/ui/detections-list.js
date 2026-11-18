@@ -1,14 +1,13 @@
-// 最新偵測事件清單（員警）：最新 20 筆，標出待補填。
+// 最新偵測事件清單（交通警察隊）：由 heatmap 挑好要顯示的筆數，標出待補填與 AI 判斷狀態。
 (function (root) {
   const UI = root.HotUI;
   UI.detList = {
-    render(listEl, detections, onPick) {
+    render(listEl, latest, onPick, emptyText) {
       const F = root.HotFilters;
       const D = root.HotDetections;
       listEl.replaceChildren();
-      const latest = detections.slice().sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0)).slice(0, 20);
       if (!latest.length) {
-        listEl.append(UI.el("li", "det__empty", "這個條件下沒有偵測事件"));
+        listEl.append(UI.el("li", "det__empty", emptyText || "這個條件下沒有偵測事件"));
         return;
       }
       latest.forEach((ev) => {
@@ -20,6 +19,8 @@
         const pending = ev.deaths === null && ev.injuries === null && !ev.cause;
         if (pending) btn.append(UI.el("span", "det__pending", "待補填"));
         if (ev.source === "sim") btn.append(UI.el("span", "det__sim", "模擬"));
+        else if (ev.verdict) btn.append(UI.el("span", `det__verdict is-${ev.verdict}`, D.VERDICT_LABEL[ev.verdict]));
+        else btn.append(UI.el("span", "det__verdict", "待確認"));
         btn.addEventListener("click", () => onPick(ev));
         const li = UI.el("li", "det__item");
         li.append(btn);

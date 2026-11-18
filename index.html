@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=0e8abc37">
+  <link rel="stylesheet" href="css/style.css?v=94257fc2">
 </head>
 <body>
   <header class="top">
@@ -177,9 +177,13 @@
       <div class="panel det-panel" id="detPanel" hidden>
         <div class="card acc-card" id="detAccuracy"></div>
         <div class="det-panel__list">
-          <h2>最新偵測事件</h2>
+          <div class="det-panel__head">
+            <h2>最新偵測事件</h2>
+            <label class="chk"><input type="checkbox" id="verifyOnly"> 只看待確認（還沒按判斷正確／誤判的）</label>
+          </div>
           <p class="panel__note" id="detNote"></p>
           <ol class="det" id="detList"></ol>
+          <button type="button" class="auth__btn det-more" id="detMore" hidden>顯示更多</button>
         </div>
       </div>
     </div>
@@ -236,7 +240,7 @@
   <script src="js/config.js?v=d79368a7"></script>
   <script src="js/filters.js?v=212784db"></script>
   <script src="js/accidents.js?v=7c0669be"></script>
-  <script src="js/detections.js?v=beea6a35"></script>
+  <script src="js/detections.js?v=0df12877"></script>
   <script src="js/weather.js?v=4057796f"></script>
   <script src="js/roads.js?v=b22019ce"></script>
   <script src="js/safety.js?v=51186e4e"></script>
@@ -258,7 +262,7 @@
   <script src="js/ui/map-sheet.js?v=0224d1ad"></script>
   <script src="js/ui/weather-layer.js?v=7f4001f8"></script>
   <script src="js/ui/rankings.js?v=a7a8d6e5"></script>
-  <script src="js/ui/detections-list.js?v=54641ca1"></script>
+  <script src="js/ui/detections-list.js?v=5b567c41"></script>
   <script src="js/ui/search-panel.js?v=06fc951a"></script>
   <script src="js/ui/cameras-layer.js?v=b32aa74f"></script>
   <script src="js/ui/fill-form.js?v=89452058"></script>
@@ -270,6 +274,6 @@
   <script src="js/ui/admin-view.js?v=1060fec0"></script>
   <script src="js/detect-client.js?v=40c825a4"></script>
   <script src="js/ui/detect-console.js?v=d842bdb7"></script>
-  <script src="js/heatmap.js?v=323a81d8"></script>
+  <script src="js/heatmap.js?v=0a08f2b3"></script>
 </body>
 </html>

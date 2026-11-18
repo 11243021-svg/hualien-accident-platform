@@ -52,6 +52,8 @@
     filtersOpen: false, // 「看哪種」預設收起
     accView: "spot", // 車禍呈現方式：spot＝斑點圖（每件事故一個點，預設）、heat＝熱度圖
     anaTab: "hour", // 事故分析目前看哪一張：hour／week／year／town／cause／type
+    verifyOnly: false, // 偵測事件清單只看還沒確認 AI 判斷的
+    detShown: D.LIST_STEP, // 偵測事件清單顯示幾筆（按「顯示更多」每次加 20）
   };
   const data = { accidents: { hualien: null, tainan: null }, detections: [], detError: null };
   let map, heatLayer, accLayer, roadLayer, detLayer, cameraLayer, weatherLayer, legend, sheet, anaChart;
@@ -806,9 +808,14 @@
     }
     if (vis.panels.detPanel) {
       const acc = D.accuracy(data.detections.filter((e) => !e.dismissed || e.verdict));
-      $("detNote").textContent = app.region === "hualien" ? `共 ${view.det.length} 筆（最新 20 筆）` : "這個地區沒有 AI 偵測資料";
+      const lv = D.listView(view.det, { verifyOnly: app.verifyOnly, shown: app.detShown });
+      $("detNote").textContent = app.region !== "hualien" ? "這個地區沒有 AI 偵測資料"
+        : `${app.verifyOnly ? "待確認" : "共"} ${lv.total.toLocaleString()} 筆，顯示最新 ${lv.items.length} 筆`;
+      $("verifyOnly").checked = app.verifyOnly;
       renderAccuracy($("detAccuracy"), D.accuracyCard(acc));
-      UI.detList.render($("detList"), view.det, focusDetection);
+      UI.detList.render($("detList"), lv.items, focusDetection, app.verifyOnly ? "這個條件下沒有待確認的偵測事件，都確認完了" : "");
+      $("detMore").hidden = !lv.more;
+      $("detMore").textContent = `顯示更多（還有 ${lv.more.toLocaleString()} 筆）`;
     }
     if (vis.panels.searchPanel) {
       const periodLabel = hasYears() ? periodText() : "";
@@ -1641,6 +1648,18 @@
     });
   }
 
+  function initDetList() {
+    $("verifyOnly").addEventListener("change", (e) => {
+      app.verifyOnly = e.target.checked;
+      app.detShown = D.LIST_STEP;
+      renderPanels();
+    });
+    $("detMore").addEventListener("click", () => {
+      app.detShown += D.LIST_STEP;
+      renderPanels();
+    });
+  }
+
   function initCharts() {
     document.querySelectorAll("#anaTabs button").forEach((b) => b.addEventListener("click", () => {
       app.anaTab = b.dataset.tab;
@@ -1729,6 +1748,7 @@
     renderFold(); // 資料載入前就先收好，畫面不會先展開再收起
     initMap();
     initCharts();
+    initDetList();
     buildCheckboxes();
     bindControls();
     writeCard = UI.writeCard.create($("writeCard"), focusDetection);

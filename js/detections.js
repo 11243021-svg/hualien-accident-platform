@@ -111,6 +111,15 @@
   const BOX_LABEL = { car: "car／bus／truck", moto: "Moto", rock: "rock", debris: "landslide" };
   // 2026-11-14 起偵測服務會在每筆截圖用紅色粗框標出「本筆」；這之前的舊截圖沒有，只能看種類的框
   const TARGET_MARK_SINCE = "2026-11-14T22:45";
+  // 還沒確認 AI 判斷的（模擬資料不用確認）
+  const needsVerify = (ev) => ev.source !== "sim" && !ev.verdict;
+  const LIST_STEP = 20;
+  // 偵測事件清單：新的在前；verifyOnly 只留待確認的；一次顯示 shown 筆
+  function listView(list, { verifyOnly = false, shown = LIST_STEP } = {}) {
+    const all = list.filter((e) => !verifyOnly || needsVerify(e))
+      .slice().sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
+    return { items: all.slice(0, shown), total: all.length, more: Math.max(0, all.length - shown) };
+  }
   const hasTargetMark = (ev) => String(ev.ts || "") >= TARGET_MARK_SINCE;
 
   // 待補填：傷亡與肇因都還沒填
@@ -179,7 +188,7 @@
   }
 
   const api = {
-    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, accuracyCard, RELIABLE_MIN, BOX_LABEL, TARGET_MARK_SINCE, hasTargetMark, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
+    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, accuracyCard, RELIABLE_MIN, BOX_LABEL, TARGET_MARK_SINCE, hasTargetMark, needsVerify, LIST_STEP, listView, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotDetections = api;
