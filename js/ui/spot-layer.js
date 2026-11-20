@@ -67,9 +67,23 @@
         if (p.x < -it.r || p.y < -it.r || p.x > size.x + it.r || p.y > size.y + it.r) continue;
         ctx.globalAlpha = it.alpha;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, it.r, 0, Math.PI * 2);
+        if (it.ring) { // 死亡：菱形（色弱分不出紅黃，靠形狀分）
+          const d = it.r * 1.35;
+          ctx.moveTo(p.x, p.y - d);
+          ctx.lineTo(p.x + d, p.y);
+          ctx.lineTo(p.x, p.y + d);
+          ctx.lineTo(p.x - d, p.y);
+          ctx.closePath();
+        } else {
+          ctx.arc(p.x, p.y, it.r, 0, Math.PI * 2);
+        }
         ctx.fillStyle = it.fill;
         ctx.fill();
+        if (it.ring) { // 死亡點加白框：色弱的人只看顏色分不出死亡和受傷
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "#ffffff";
+          ctx.stroke();
+        }
         screen.push({ x: p.x, y: p.y, r: it.r, i });
       }
       ctx.globalAlpha = 1;

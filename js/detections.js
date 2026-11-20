@@ -86,13 +86,21 @@
     return parts.join(" ") + (ev.weatherStation ? `（${ev.weatherStation}測站）` : "");
   }
 
-  // AI 正確率：交通警察隊確認過的偵測（真實＋測試，不含模擬）裡，判斷正確的比例
+  // AI 正確率：交通警察隊確認過的偵測（真實＋測試，不含模擬）裡，判斷正確的比例；「看不清楚」不列入
   function accuracy(list) {
-    const checked = list.filter((e) => e.source !== "sim" && (e.verdict === "correct" || e.verdict === "wrong"));
+    const real = list.filter((e) => e.source !== "sim");
+    const checked = real.filter((e) => e.verdict === "correct" || e.verdict === "wrong");
     const correct = checked.filter((e) => e.verdict === "correct").length;
-    return { checked: checked.length, correct, wrong: checked.length - correct, rate: checked.length ? correct / checked.length : null };
+    const unclear = real.filter((e) => e.verdict === "unclear").length;
+    return { checked: checked.length, correct, wrong: checked.length - correct, unclear, rate: checked.length ? correct / checked.length : null };
   }
-  const VERDICT_LABEL = { correct: "判斷正確", wrong: "誤判" };
+  // 資料庫函式 detection_accuracy() 回傳的一列 → 跟 accuracy() 一樣的格式
+  function accuracyFromRow(row) {
+    if (!row) return null;
+    const checked = Number(row.checked) || 0, correct = Number(row.correct) || 0;
+    return { checked, correct, wrong: Number(row.wrong) || 0, unclear: Number(row.unclear) || 0, rate: checked ? correct / checked : null };
+  }
+  const VERDICT_LABEL = { correct: "判斷正確", wrong: "誤判", unclear: "看不清楚" };
   // 正確率卡片要顯示的文字；確認不到 RELIABLE_MIN 筆時提醒「數字還不夠可靠」
   const RELIABLE_MIN = 30;
   function accuracyCard(acc) {
@@ -103,12 +111,14 @@
     return {
       value: `${pct}%`,
       correctPct: pct,
-      detail: `已確認 ${acc.checked} 筆（正確 ${acc.correct}・誤判 ${acc.wrong}）`,
+      detail: `已確認 ${acc.checked} 筆（正確 ${acc.correct}・誤判 ${acc.wrong}）${acc.unclear ? `；看不清楚 ${acc.unclear} 筆不列入` : ""}`,
       hint: acc.checked < RELIABLE_MIN ? `確認 ${RELIABLE_MIN} 筆以上，數字更可靠（還差 ${RELIABLE_MIN - acc.checked} 筆）` : "",
     };
   }
   // 截圖上每種東西的框標示的文字（偵測程式畫的），確認時告訴大家要看哪個框
   const BOX_LABEL = { car: "car／bus／truck", moto: "Moto", rock: "rock", debris: "landslide" };
+  // 確認時說清楚種類的範圍：汽車類包含小客車、貨車、公車（截圖上的框可能寫「貨車」，一樣算汽車）
+  const KIND_SCOPE = { car: "汽車類（小客車、貨車、公車都算）", moto: "機車", rock: "落石", debris: "坍方或路上障礙物" };
   // 2026-11-14 起偵測服務會在每筆截圖用紅色粗框標出「本筆」；這之前的舊截圖沒有，只能看種類的框
   const TARGET_MARK_SINCE = "2026-11-14T22:45";
   // 還沒確認 AI 判斷的（模擬資料不用確認）
@@ -188,7 +198,7 @@
   }
 
   const api = {
-    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, accuracyCard, RELIABLE_MIN, BOX_LABEL, TARGET_MARK_SINCE, hasTargetMark, needsVerify, LIST_STEP, listView, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
+    COLUMNS, FILL_COLUMNS, WEATHER_COLUMNS, VERIFY_COLUMNS, COLUMN_SETS, weatherText, accuracy, accuracyFromRow, accuracyCard, RELIABLE_MIN, BOX_LABEL, KIND_SCOPE, TARGET_MARK_SINCE, hasTargetMark, needsVerify, LIST_STEP, listView, VERDICT_LABEL, FILL_TYPES, OTHER_CAUSE, toTaiwanTs, normalizeDetection, shortAddress, isPending, taiwanDate, validateFill, fillText, writeFields,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotDetections = api;

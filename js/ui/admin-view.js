@@ -58,7 +58,8 @@
       const requests = block("身分申請", "Google 登入者可申請公路局或交通警察隊身分；核可後才會取得對應功能。系統管理員身分必須由現任管理員直接設定。");
       const dism = block("誤報清單", "標為誤報的偵測事件，所有人的地圖上都看不到；按「復原」就會回到地圖上。");
       const log = block("補填紀錄", "最新 100 筆：誰、什麼時候、做了什麼。");
-      rootEl.replaceChildren(users.box, requests.box, dism.box, log.box);
+      const fb = block("使用者回饋", "網站右下角「回報問題」送來的意見（不用登入就能送）。處理完按「標為已處理」；還沒處理的排在最上面。");
+      rootEl.replaceChildren(users.box, requests.box, fb.box, dism.box, log.box);
 
       // 自動更新用：上次畫的內容（一樣就不用重畫）、有沒有改到一半還沒儲存
       let usersSig = "";
@@ -249,11 +250,50 @@
             }
           });
           const tr = UI.el("tr");
-          tr.append(td(time(ev.ts)), td(F.KIND_LABEL[ev.kind]), td(D.shortAddress(ev) || ev.place), td(ev.source === "real" ? "真實" : "模擬"), td(ev.dismissedBy), td(time(ev.dismissedAt)), td(back));
+          tr.append(td(time(ev.ts)), td(F.KIND_LABEL[ev.kind]), td(D.shortAddress(ev) || ev.place), td({ real: "真實", test: "測試", sim: "模擬" }[ev.source] || ev.source), td(ev.dismissedBy), td(time(ev.dismissedAt)), td(back));
           tbody.append(tr);
         });
         dism.body.replaceChildren(t);
         dism.say(list.length ? `共 ${list.length} 筆` : "");
+      }
+
+      let fbSig = "";
+      async function loadFeedback(quiet) {
+        if (!quiet) fb.say("載入中…");
+        let list;
+        try {
+          list = await opts.api.listFeedback();
+        } catch (err) {
+          if (quiet) return;
+          fb.body.replaceChildren();
+          return fb.say(/admin_list_feedback|schema cache/i.test(err.message) ? "回饋功能還沒開通：請先在 Supabase 執行 012_ux_fixes.sql" : "載入失敗：" + err.message, true);
+        }
+        const sig = JSON.stringify(list);
+        if (quiet && sig === fbSig) return;
+        fbSig = sig;
+        const { t, tbody } = table(["時間", "內容", "畫面", "裝置", "聯絡方式", "狀態", ""]);
+        if (!list.length) emptyRow(tbody, 7, "還沒有人回報問題");
+        list.forEach((f) => {
+          const done = f.status === "done";
+          const btn = UI.el("button", "auth__btn", done ? "改回未處理" : "標為已處理");
+          btn.type = "button";
+          btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            try {
+              await opts.api.setFeedbackStatus(f.id, !done);
+              loadFeedback();
+            } catch (err) {
+              fb.say("更新失敗：" + err.message, true);
+              btn.disabled = false;
+            }
+          });
+          const tr = UI.el("tr", done ? "is-done" : "");
+          tr.append(td(time(f.createdAt)), td(f.message), td(f.page), td(f.device), td(f.contact), td(done ? `已處理（${f.handledBy || "—"}）` : "未處理"), td(btn));
+          tbody.append(tr);
+        });
+        fb.body.replaceChildren(t);
+        const open = list.filter((f) => f.status !== "done").length;
+        fb.say(list.length ? `共 ${list.length} 則，未處理 ${open} 則` : "");
       }
 
       async function loadLog() {
@@ -280,6 +320,7 @@
         show() {
           loadUsers();
           loadRoleRequests();
+          loadFeedback();
           loadDismissed();
           loadLog();
         },
@@ -288,6 +329,7 @@
         refresh() {
           loadUsers(true);
           loadRoleRequests(true);
+          loadFeedback(true);
         },
       };
     },

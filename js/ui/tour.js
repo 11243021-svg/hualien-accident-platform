@@ -1,15 +1,23 @@
-// 第一次打開的小導覽：3 步說明這個網站能做什麼。看過就記在瀏覽器，右上角「使用說明」可以再叫出來。
+// 第一次打開的小導覽：4 步說明這個網站能做什麼。看過就記在瀏覽器，右上角「使用說明」可以再叫出來。
 (function (root) {
   const UI = root.HotUI;
   const KEY = "hotspot.tourSeen";
 
   const STEPS = [
     {
+      title: "這個網站可以幫你做什麼",
+      lines: [
+        "看看花蓮哪些路最常出車禍，出門前查一下要走的路安不安全。",
+        "用公路局的監視器看現在的路況；AI 會幫忙盯著，發現落石、路上停車等異常就通報。",
+        "資料來自政府公開的車禍紀錄（110～114 年），一般民眾不用登入就能用。",
+      ],
+    },
+    {
       title: "看地圖：每個點是一件車禍",
       lines: [
-        "紅色點＝有人死亡的車禍，黃色點＝有人受傷的車禍；顏色淺是白天、深是晚上。",
+        "紅色菱形（有白框）＝有人死亡的車禍，黃色圓點＝有人受傷的車禍；顏色淺是白天、深是晚上。",
         "點一下地圖上的點，就能看到那件車禍的時間、地點和原因。",
-        "綠色的攝影機圖示是公路局監視器，點了可以看現在的即時路況。",
+        "方形的攝影機圖示是公路局監視器，點了可以看現在的即時路況。",
       ],
     },
     {
@@ -29,6 +37,28 @@
       ],
     },
   ];
+
+  // 簡易模式：只講四個大按鈕
+  const SIMPLE_STEPS = [
+    {
+      title: "這個網站可以幫你做什麼",
+      lines: [
+        "看看花蓮哪些路最常出車禍，出門前查一下要走的路安不安全。",
+        "資料來自政府公開的車禍紀錄（110～114 年），不用登入就能用。",
+      ],
+    },
+    {
+      title: "四個大按鈕",
+      lines: [
+        "查一條路：打路名（例如 中山路），看這條路出過幾次車禍。",
+        "查路線：打起點、終點，看沿路哪裡最常出事。",
+        "看最危險的路：直接列出最該小心的 10 條路。",
+        "看監視器：點地圖上的攝影機圖示，看現在的路況。",
+        "地圖上的點：紅色菱形＝有人死亡、黃色圓點＝有人受傷。字太小可以按上方「顯示設定」調大。",
+      ],
+    },
+  ];
+  const steps = () => (document.documentElement.dataset.mode === "simple" ? SIMPLE_STEPS : STEPS);
 
   const seen = () => {
     try {
@@ -62,16 +92,17 @@
         return b;
       }
       function render() {
-        const s = STEPS[i];
+        const list = steps();
+        const s = list[i];
         box.replaceChildren();
-        box.append(UI.el("p", "tour__step", `使用說明 ${i + 1} / ${STEPS.length}`), UI.el("h2", "login__title", s.title));
+        box.append(UI.el("p", "tour__step", `使用說明 ${i + 1} / ${list.length}`), UI.el("h2", "login__title", s.title));
         const ul = UI.el("ul", "tour__list");
         s.lines.forEach((t) => ul.append(UI.el("li", null, t)));
         box.append(ul);
         const btns = UI.el("div", "login__btns");
         btns.append(btn("略過", "auth__btn tour__skip", close));
         if (i > 0) btns.append(btn("上一步", "auth__btn", () => { i--; render(); }));
-        btns.append(i < STEPS.length - 1
+        btns.append(i < list.length - 1
           ? btn("下一步", "auth__btn auth__btn--main", () => { i++; render(); })
           : btn("開始使用", "auth__btn auth__btn--main", close));
         box.append(btns);

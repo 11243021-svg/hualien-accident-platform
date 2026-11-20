@@ -114,11 +114,18 @@
       if (error) throw new Error(error.message || "補填失敗");
       return rowToEvent(data);
     },
-    // 確認 AI 判斷：correct=true 判斷正確、false 誤判（交通警察隊、系統管理員）
-    async verify(id, correct) {
-      const { data, error } = await needClient().rpc("verify_detection", { p_id: id, p_correct: correct });
-      if (error) throw new Error(error.message || "確認失敗");
-      return rowToEvent(data);
+    // 確認 AI 判斷：verdict＝correct（判斷正確）／wrong（誤判）／unclear（看不清楚，不列入正確率）
+    // 012 SQL 還沒跑時退回舊函式（只能選正確或誤判）
+    async verify(id, verdict) {
+      const sb = needClient();
+      const r = await sb.rpc("set_detection_verdict", { p_id: id, p_verdict: verdict });
+      if (!r.error) return rowToEvent(r.data);
+      const missing = /set_detection_verdict|does not exist|schema cache/i.test(r.error.message || "");
+      if (!missing) throw new Error(r.error.message || "確認失敗");
+      if (verdict === "unclear") throw new Error("資料庫還沒更新（請先執行 012_ux_fixes.sql）");
+      const old = await sb.rpc("verify_detection", { p_id: id, p_correct: verdict === "correct" });
+      if (old.error) throw new Error(old.error.message || "確認失敗");
+      return rowToEvent(old.data);
     },
     // 標誤報（on=true）／復原（on=false），只有系統管理員能用
     async dismiss(id, on) {
@@ -170,8 +177,51 @@
     };
   }
 
+  // 偵測正確率：資料庫算（含已標誤報的事件）；012 SQL 還沒跑就回 null，畫面改用目前看得到的資料算
+  async function accuracy() {
+    const sb = client();
+    if (!sb) return null;
+    const { data, error } = await sb.rpc("detection_accuracy");
+    if (error) return null;
+    return root.HotDetections.accuracyFromRow(Array.isArray(data) ? data[0] : data);
+  }
+
+  // 使用者回饋：不用登入；同一台裝置用一個隨機代號（防洗版用，不是個資）
+  const feedback = {
+    clientId() {
+      try {
+        let id = window.localStorage.getItem("hotspot.clientId");
+        if (!id) {
+          id = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).slice(0, 36);
+          window.localStorage.setItem("hotspot.clientId", id);
+        }
+        return id;
+      } catch (e) {
+        return "";
+      }
+    },
+    async submit({ message, page, device, contact }) {
+      const { error } = await needClient().rpc("submit_feedback", {
+        p_message: message, p_page: page || null, p_device: device || null, p_contact: contact || null, p_client: feedback.clientId() || null,
+      });
+      if (error) throw new Error(/submit_feedback|schema cache/i.test(error.message || "") ? "回饋功能還沒開通（請管理員執行 012_ux_fixes.sql）" : error.message);
+    },
+  };
+
   // 系統管理員用：帳號、誤報、補填紀錄（資料庫會再核對是不是管理員）
   const admin = {
+    async listFeedback() {
+      const { data, error } = await needClient().rpc("admin_list_feedback");
+      if (error) throw new Error(error.message);
+      return (data || []).map((f) => ({
+        id: f.id, createdAt: f.created_at ? root.HotDetections.toTaiwanTs(f.created_at) : null, message: f.message || "",
+        page: f.page || "", device: f.device || "", contact: f.contact || "", status: f.status, handledBy: f.handled_by_name || "",
+      }));
+    },
+    async setFeedbackStatus(id, done) {
+      const { error } = await needClient().rpc("admin_set_feedback_status", { p_id: id, p_done: done });
+      if (error) throw new Error(error.message);
+    },
     async listRoleRequests() {
       const { data, error } = await needClient().rpc("admin_list_role_requests");
       if (error) throw new Error(error.message);
@@ -351,5 +401,5 @@
     },
   };
 
-  root.HotData = { loadEvents, loadAccidents, fetchAllRows, subscribeEvents, auth, admin, route, ai, weather };
+  root.HotData = { loadEvents, loadAccidents, fetchAllRows, subscribeEvents, auth, admin, route, ai, weather, accuracy, feedback };
 })(this);

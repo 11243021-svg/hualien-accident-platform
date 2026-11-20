@@ -13,23 +13,41 @@
     wrap.append(img, fail);
     return { wrap, img };
   }
+  // 直播重新連線：先拿掉網址再放回去，瀏覽器才會重新下載
+  function reconnect(img, src) {
+    img.removeAttribute("src");
+    setTimeout(() => (img.src = src), 50);
+  }
   function popup(cam, snap, extra) {
     const box = UI.el("div", "pop cam");
     let live = null;
     if (snap) {
       live = liveBox();
-      box.append(live.wrap, UI.el("p", "cam__live-note", "公路局即時影像（直播）"));
+      const tools = UI.el("div", "cam__tools");
+      const full = UI.el("button", "cam__tool", "⛶ 全螢幕看");
+      const again = UI.el("button", "cam__tool", "↻ 畫面卡住？重新連線");
+      full.type = again.type = "button";
+      full.addEventListener("click", () => UI.viewImage(snap, "公路局即時影像", true));
+      again.addEventListener("click", () => reconnect(live.img, snap));
+      live.img.classList.add("is-zoomable");
+      live.img.title = "點一下全螢幕看";
+      live.img.addEventListener("click", () => UI.viewImage(snap, "公路局即時影像", true));
+      tools.append(full, again);
+      box.append(live.wrap, UI.el("p", "cam__live-note", "公路局即時影像（直播）"), tools);
     }
     const nm = root.HotCameras.splitName(cam.name);
     box.append(UI.el("div", "pop__head cam__name", nm.main));
     if (nm.sub) box.append(UI.el("div", "cam__sub", nm.sub));
     const dl = UI.el("dl", "pop__rows");
     const road = root.HotCameras.roadText(cam);
+    const staff = extra && extra.canDetect && extra.canDetect(); // 交通警察隊、系統管理員才看測試／模擬件數
+    const sim = cam.count - (cam.real || 0) - (cam.test || 0);
     const rows = [
       ...(road ? [["所在道路", road]] : []),
       ["座標", `${cam.lat.toFixed(6)}, ${cam.lon.toFixed(6)}`],
-      ["真實偵測", `${cam.real || 0} 件`],
-      ...(cam.count > (cam.real || 0) ? [["模擬偵測", `${cam.count - (cam.real || 0)} 件`]] : []),
+      ["AI 偵測到", `${cam.real || 0} 件`],
+      ...(staff && cam.test ? [["測試時記的", `${cam.test} 件`]] : []),
+      ...(staff && sim > 0 ? [["模擬資料", `${sim} 件`]] : []),
       ["最近一次", cam.latest ? cam.latest.replace("T", " ") : "—"],
     ];
     rows.forEach(([k, v]) => dl.append(UI.el("dt", null, k), UI.el("dd", null, v)));
@@ -40,7 +58,7 @@
       go.addEventListener("click", () => extra.onDetect(cam));
       box.append(go);
     }
-    if (cam.liveUrl) {
+    if (cam.liveUrl && !snap) { // 沒有直播網址時才給公路局網頁連結
       const a = UI.el("a", "cam__live", "開啟即時畫面 ↗");
       a.href = cam.liveUrl;
       a.target = "_blank";
@@ -78,14 +96,15 @@
   const signature = (cams) => cams.map((c) => `${c.id}|${c.count}|${c.real || 0}|${c.latest || ""}`).join(";");
   // 監視器圖示：有真實偵測的右上角加數字小標籤（真實偵測的點就在監視器位置，會被圖示蓋住，所以用數字表示）
   const iconCache = {};
-  function camIcon(real, detecting, picked) {
+  function camIcon(real, detecting, picked, viewed) {
     const num = real > 99 ? "99+" : String(real || 0);
-    const key = num + (detecting ? "|on" : "") + (picked ? "|picked" : "");
+    const key = num + (detecting ? "|on" : "") + (picked ? "|picked" : "") + (viewed ? "|viewed" : "");
     if (!iconCache[key]) {
       const html = real ? `<span class="cam-badge">${num}</span>` : "";
       // 偵測主機正在偵測這台：外圈加紅色脈動，一看就知道是哪一台
       // AI 偵測選的那台換成天藍色（紫色會跟安全指數的紫色圓圈混在一起）
-      iconCache[key] = L.divIcon({ className: "cam-icon" + (picked ? " is-picked" : "") + (detecting ? " is-detecting" : ""), html, iconSize: [28, 28] });
+      // 看過（點開過）的監視器加天藍色外框，才知道剛剛點的是哪一台
+      iconCache[key] = L.divIcon({ className: "cam-icon" + (picked ? " is-picked" : "") + (detecting ? " is-detecting" : "") + (viewed ? " is-viewed" : ""), html, iconSize: [28, 28] });
     }
     return iconCache[key];
   }
@@ -107,8 +126,17 @@
       map.on("popupclose", (e) => {
         if (e.popup === camPopup) stopLive();
       });
+      let viewedId = ""; // 最近點開的監視器
+      let last = null; // 上次 update 的參數（點開別台時要重畫圖示）
       function openCam(cam) {
         stopLive();
+        if (viewedId !== cam.id) {
+          viewedId = cam.id;
+          if (last) {
+            drawn = null;
+            api.update(...last);
+          }
+        }
         const stream = root.HotCameras.streamUrl(cam);
         const { box, img } = popup(cam, stream, extra);
         // 手機地圖較窄，小卡片最小寬度不超過地圖寬度
@@ -118,11 +146,12 @@
         liveImg = img;
         img.src = stream;
       }
-      return {
+      const api = {
         open: openCam,
         // detectingId：偵測主機正在偵測的監視器 id；pickedId：AI 偵測畫面選的監視器 id（沒有就是空字串）
         update(cams, visible, detectingId, pickedId) {
-          const sig = visible ? signature(cams) + "#" + (detectingId || "") + "#" + (pickedId || "") : "";
+          last = [cams, visible, detectingId, pickedId];
+          const sig = visible ? signature(cams) + "#" + (detectingId || "") + "#" + (pickedId || "") + "#" + viewedId : "";
           if (drawn && drawn.sig === sig && drawn.visible === visible) return;
           drawn = { sig, visible };
           layer.clearLayers();
@@ -135,14 +164,16 @@
           cams.forEach((cam) => {
             const on = !!detectingId && cam.id === detectingId;
             const picked = !!pickedId && cam.id === pickedId;
-            L.marker([cam.lat, cam.lon], { icon: camIcon(cam.real, on, picked), zIndexOffset: on || picked ? 1100 : 1000 })
-              .bindTooltip(() => UI.el("span", null, `${on ? "AI 偵測中｜" : picked ? "AI 偵測已選｜" : ""}${root.HotCameras.splitName(cam.name).main}（真實偵測 ${cam.real || 0} 件）`), { direction: "top", offset: [0, -14], className: "hot-tip" })
+            const viewed = cam.id === viewedId;
+            L.marker([cam.lat, cam.lon], { icon: camIcon(cam.real, on, picked, viewed), zIndexOffset: on || picked || viewed ? 1100 : 1000 })
+              .bindTooltip(() => UI.el("span", null, `${on ? "AI 偵測中｜" : picked ? "AI 偵測已選｜" : viewed ? "剛剛看的｜" : ""}${root.HotCameras.splitName(cam.name).main}（AI 偵測到 ${cam.real || 0} 件）`), { direction: "top", offset: [0, -14], className: "hot-tip" })
               .on("click", () => openCam(cam))
               .addTo(layer);
           });
           layer.addTo(map);
         },
       };
+      return api;
     },
   };
 })(this);

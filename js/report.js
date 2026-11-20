@@ -33,12 +33,27 @@
     return BOM + lines.join(EOL) + EOL;
   }
 
-  function fileName(region, now) {
-    const d = now || new Date();
-    return `熱點地圖_路段報表_${region}_${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}.csv`;
+  // 危險度報表（「最該優先改善」頁籤）：rows 是 HotSafety.scoreRoads 的結果（已依危險度排好）
+  const SAFETY_HEADER = ["名次", "鄉鎮", "路段", "危險度（越高越危險）", "等級", "事故件數", "死亡人數", "受傷人數", "近一年件數", "前一年件數"];
+  function toSafetyCsv(rows, meta) {
+    const now = meta.now || new Date();
+    const lines = [
+      csvLine(["路段危險度報表", meta.region, meta.town || "全部", meta.period, meta.time, "危險度＝事故件數40%＋嚴重程度40%＋近一年趨勢20%", `產生時間 ${stamp(now)}`]),
+      csvLine(SAFETY_HEADER),
+    ];
+    rows.forEach((r, i) => {
+      lines.push(csvLine([i + 1, r.town, r.road, r.score === null ? "" : 100 - r.score, r.level ? r.level.label : "", r.count, r.deaths, r.injuries,
+        r.trend ? r.trend.recent : "", r.trend ? r.trend.prev : ""]));
+    });
+    return BOM + lines.join(EOL) + EOL;
   }
 
-  const api = { TIER_LABEL, HEADER, csvField, toCsv, fileName };
+  function fileName(region, now, kind) {
+    const d = now || new Date();
+    return `熱點地圖_${kind || "路段報表"}_${region}_${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}.csv`;
+  }
+
+  const api = { TIER_LABEL, HEADER, SAFETY_HEADER, csvField, toCsv, toSafetyCsv, fileName };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotReport = api;
 })(this);

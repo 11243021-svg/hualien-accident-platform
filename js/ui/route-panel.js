@@ -123,14 +123,14 @@
         const pts = ctx.accidents();
         const h = R.routeHazards(r.line, pts, 30);
         R.dangerSegments(r.line, h.points, { radius: 30, threshold: "auto" }).forEach((s) => {
-          L.polyline([s.from, s.to], Object.assign({ color: s.danger ? "#ff2e2e" : "#48c3ac", weight: s.danger ? 7 : 5, opacity: 0.9, interactive: false }, ctx.lineOpts)).addTo(ctx.layer);
+          L.polyline([s.from, s.to], Object.assign({ color: s.danger ? "#ff4fd8" : "#48c3ac", weight: s.danger ? 7 : 5, opacity: 0.9, interactive: false }, ctx.lineOpts)).addTo(ctx.layer);
         });
         pin(r.a, "起");
         pin(r.b, "終");
         result.replaceChildren();
         result.append(UI.el("p", "route__meta", `起點：${r.a.label || "起點"}　→　終點：${r.b.label || "終點"}`));
         result.append(UI.el("p", "route__sum", R.summaryText(h, ctx.periodLabel())));
-        result.append(UI.el("p", "route__meta", `開車約 ${r.km} 公里、${r.minutes} 分鐘；紅色＝這條路上車禍特別密集的路段`));
+        result.append(UI.el("p", "route__meta", `開車約 ${r.km} 公里、${r.minutes} 分鐘；粉紫色＝這條路上車禍特別密集的路段`));
         if (ctx.safety) UI.safetyLines(result, h.points, ctx.safety());
         if (h.top.length) {
           result.append(UI.el("h3", "search__h", "沿路最常出事的地點"));
@@ -214,10 +214,11 @@
         say("請在地圖上點起點");
         pick.textContent = "取消點選";
         ctx.map.getContainer().classList.add("is-picking");
+        ctx.map.getContainer().scrollIntoView({ behavior: "smooth", block: "center" }); // 路線面板在地圖右邊或下面，捲過去才點得到
         pickHandler = (e) => {
           const p = { lat: e.latlng.lat, lon: e.latlng.lng };
           picked.push(p);
-          p.label = picked.length ? "地圖上點的終點" : "地圖上點的起點";
+          p.label = picked.length === 1 ? "地圖上點的起點" : "地圖上點的終點";
           pin(p, picked.length === 1 ? "起" : "終");
           if (picked.length === 1) return say("請在地圖上點終點");
           stopPick();

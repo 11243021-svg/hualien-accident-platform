@@ -5,10 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>花蓮縣交通事故通報平台</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=94257fc2">
+  <link rel="stylesheet" href="css/style.css?v=57237ac4">
+  <script>
+    // 顯示設定（簡易／字大小／風格）在畫面出來前先套上，才不會先閃一下預設樣式
+    try { var ds = JSON.parse(localStorage.getItem("hotspot.display") || "null"); if (ds) ["mode", "font", "theme"].forEach(function (k) { if (typeof ds[k] === "string") document.documentElement.dataset[k] = ds[k]; }); } catch (e) {}
+  </script>
 </head>
 <body>
   <header class="top">
@@ -26,13 +31,14 @@
       <span id="rangeAcc">車禍：--</span>
       <span id="rangeDet"></span>
     </div>
+    <button type="button" class="auth__btn top__help" id="settingsBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>顯示設定</button>
     <button type="button" class="auth__btn top__help" id="helpBtn">使用說明</button>
     <div class="top__auth" id="authBox"></div>
   </header>
 
   <section class="controls">
     <div class="fgroup">
-      <h2 class="fgroup__title">📍 看哪裡</h2>
+      <h2 class="fgroup__title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>看哪裡</h2>
       <div class="fgroup__body">
         <select class="sel" id="regionSel" aria-label="地區">
           <option value="hualien">花蓮</option>
@@ -41,16 +47,18 @@
         <select class="sel" id="townSel" aria-label="鄉鎮"><option value="">全部鄉鎮</option></select>
         <select class="sel" id="villageSel" aria-label="村里"><option value="">全部村里</option></select>
         <form class="search" id="searchForm">
-          <input class="search__input" id="searchInput" type="search" placeholder="路名，例如 建國路" autocomplete="off" aria-label="路名搜尋">
+          <input class="search__input" id="searchInput" type="search" placeholder="路名，例如 建國路" autocomplete="off" aria-label="路名搜尋" maxlength="30">
           <button type="submit" class="search__go">查詢</button>
           <button type="button" class="search__clear" id="searchClear">清除</button>
         </form>
+        <p class="search-sum" id="searchSummary" role="status" aria-live="polite" hidden></p>
       </div>
     </div>
 
+    <button type="button" class="more-filters" id="moreFilters" aria-expanded="false">更多篩選（時間、種類）▾</button>
     <div class="fgroup fgroup--mfold" id="timeGroup">
       <div class="fgroup__head">
-        <h2 class="fgroup__title">🕒 看什麼時候</h2>
+        <h2 class="fgroup__title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>看什麼時候</h2>
         <span class="fgroup__summary fgroup__msum" id="timeSummary"></span>
         <button type="button" class="fgroup__toggle fgroup__mtoggle" id="timeToggle" aria-expanded="false" aria-controls="timeBody">展開 ▾</button>
       </div>
@@ -83,7 +91,7 @@
 
     <div class="fgroup fgroup--fold" id="kindGroup">
       <div class="fgroup__head">
-        <h2 class="fgroup__title">🔎 看哪種</h2>
+        <h2 class="fgroup__title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>看哪種</h2>
         <span class="fgroup__summary" id="kindSummary"></span>
         <button type="button" class="fgroup__toggle" id="kindToggle" aria-expanded="false" aria-controls="kindBody">展開 ▾</button>
       </div>
@@ -100,17 +108,6 @@
             <summary>事故型態<span id="typeCount"></span> ▾</summary>
             <div class="more__body" id="typeBox"></div>
           </details>
-        </div>
-        <div class="fgroup__line" id="mayorFilters">
-          <span class="controls__label">路段依</span>
-          <select class="sel" id="metricSel" aria-label="路段分級依據">
-            <option value="count">事故件數</option>
-            <option value="casualties">傷亡人數</option>
-            <option value="deaths">死亡人數</option>
-          </select>
-          <span class="controls__label">排名，只列出出事</span>
-          <input class="num" type="number" id="minCount" min="10" step="1" value="10" aria-label="最少件數">
-          <span class="controls__label">次以上的路</span>
         </div>
         <div class="fgroup__line" id="sourceLine">
           <span class="controls__label">AI 偵測來源</span>
@@ -145,6 +142,12 @@
 
   <main class="layout">
     <div class="map-col">
+      <nav class="simple-bar" id="simpleBar" aria-label="常用功能">
+        <button type="button" data-go="search"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>查一條路</span></button>
+        <button type="button" data-go="route"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg><span>查路線</span></button>
+        <button type="button" data-go="danger"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>看最危險的路</span></button>
+        <button type="button" data-go="cams"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span>看監視器</span></button>
+      </nav>
       <div class="map-head">
         <p class="map-hint" id="personaHint"></p>
         <p class="map-tip" id="mapTip"></p>
@@ -173,7 +176,25 @@
         <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
         <section class="wcard" id="writeCard" aria-live="polite" aria-label="新偵測事件寫入資料庫" hidden></section>
       </div>
+      <div class="panel" id="searchPanel" hidden>
+        <h2 id="searchTitle">查詢路況</h2>
+        <div id="searchBody"></div>
+      </div>
       <section class="safety-panel" id="safetyPanel" hidden aria-label="道路安全指數排行"></section>
+      <div class="chart-box" id="analysisBox" hidden>
+        <h2>事故分析</h2>
+        <div class="ana-tabs" id="anaTabs" role="tablist" aria-label="切換分析圖">
+          <button type="button" data-tab="hour" role="tab">時段</button>
+          <button type="button" data-tab="week" role="tab">星期</button>
+          <button type="button" data-tab="year" role="tab">年度趨勢</button>
+          <button type="button" data-tab="town" role="tab">鄉鎮比較</button>
+          <button type="button" data-tab="cause" role="tab">肇因</button>
+          <button type="button" data-tab="type" role="tab">事故型態</button>
+        </div>
+        <p class="chart-box__lead" id="anaLead"></p>
+        <div class="chart-box__canvas" id="anaCanvasBox"><canvas id="anaChart"></canvas></div>
+        <p class="chart-box__note" id="anaNote"></p>
+      </div>
       <div class="panel det-panel" id="detPanel" hidden>
         <div class="card acc-card" id="detAccuracy"></div>
         <div class="det-panel__list">
@@ -195,85 +216,96 @@
       </div>
       <div class="panel" id="rankPanel">
         <div class="panel__head">
-          <h2 id="rankTitle">事故件數排行</h2>
+          <h2 id="rankTitle">路段排行</h2>
           <button type="button" class="panel__btn" id="aiBtn" hidden>AI 分析這個轄區</button>
-          <button type="button" class="panel__btn" id="csvBtn" disabled>⬇ 下載報表（CSV）</button>
+          <button type="button" class="panel__btn" id="csvBtn" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>下載報表（CSV）</button>
         </div>
-        <p class="panel__note" id="rankNote"></p>
-        <ol class="rank" id="rankList"></ol>
+        <div class="seg rank-tabs" id="rankTabs" role="group" aria-label="排行方式">
+          <button type="button" data-rank="count" class="is-on" aria-pressed="true">事故最多</button>
+          <button type="button" data-rank="safety" aria-pressed="false">最該優先改善</button>
+        </div>
+        <div id="rankCount">
+          <div class="rank-opts" id="mayorFilters">
+            <span class="controls__label">路段依</span>
+            <select class="sel" id="metricSel" aria-label="路段分級依據">
+              <option value="count">事故件數</option>
+              <option value="casualties">傷亡人數</option>
+              <option value="deaths">死亡人數</option>
+            </select>
+            <span class="controls__label">排名，只列出出事</span>
+            <input class="num" type="number" id="minCount" min="10" step="1" value="10" aria-label="最少件數">
+            <span class="controls__label">次以上的路</span>
+          </div>
+          <p class="panel__note" id="rankNote"></p>
+          <ol class="rank" id="rankList"></ol>
+        </div>
+        <div id="rankSafety" hidden></div>
       </div>
       <div class="panel" id="routePanel" hidden>
         <h2>路線安全</h2>
         <div id="routeBody"></div>
       </div>
-      <div class="panel" id="searchPanel" hidden>
-        <h2 id="searchTitle">查詢路況</h2>
-        <div id="searchBody"></div>
-      </div>
-      <div class="chart-box" id="analysisBox" hidden>
-        <h2>事故分析</h2>
-        <div class="ana-tabs" id="anaTabs" role="tablist" aria-label="切換分析圖">
-          <button type="button" data-tab="hour" role="tab">時段</button>
-          <button type="button" data-tab="week" role="tab">星期</button>
-          <button type="button" data-tab="year" role="tab">年度趨勢</button>
-          <button type="button" data-tab="town" role="tab">鄉鎮比較</button>
-          <button type="button" data-tab="cause" role="tab">肇因</button>
-          <button type="button" data-tab="type" role="tab">事故型態</button>
-        </div>
-        <p class="chart-box__lead" id="anaLead"></p>
-        <div class="chart-box__canvas" id="anaCanvasBox"><canvas id="anaChart"></canvas></div>
-        <p class="chart-box__note" id="anaNote"></p>
-      </div>
     </aside>
   </main>
+  <footer class="site-foot" id="siteFoot">
+    資料來源：車禍資料——內政部警政署「傷亡道路交通事故資料」（A1、A2 類，110～114 年，政府資料開放平臺 data.gov.tw）；
+    監視器即時影像——交通部公路局；即時天氣——交通部中央氣象署開放資料；路線與地名——OpenStreetMap／OSRM。
+    本網站的車禍統計是過去的紀錄，不是即時路況；AI 偵測與通報為即時。
+  </footer>
 
   <section class="detect" id="detectView" hidden aria-label="AI 偵測"></section>
   <section class="admin" id="adminView" hidden aria-label="系統管理"></section>
   <dialog class="login-dialog" id="loginDialog" aria-label="登入"></dialog>
   <dialog class="login-dialog ai-dialog" id="aiDialog" aria-label="AI 轄區分析"></dialog>
   <dialog class="login-dialog tour-dialog" id="tourDialog" aria-label="使用說明"></dialog>
+  <dialog class="login-dialog settings-dialog" id="settingsDialog" aria-label="顯示設定"></dialog>
+  <dialog class="login-dialog feedback-dialog" id="feedbackDialog" aria-label="回報問題"></dialog>
+  <button type="button" class="fb-btn" id="feedbackBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>回報問題</button>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="https://unpkg.com/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
   <script src="js/config.js?v=d79368a7"></script>
   <script src="js/filters.js?v=212784db"></script>
   <script src="js/accidents.js?v=7c0669be"></script>
-  <script src="js/detections.js?v=0df12877"></script>
+  <script src="js/detections.js?v=cf21af41"></script>
   <script src="js/weather.js?v=4057796f"></script>
-  <script src="js/roads.js?v=b22019ce"></script>
+  <script src="js/roads.js?v=1ee9cc3d"></script>
   <script src="js/safety.js?v=51186e4e"></script>
   <script src="js/route.js?v=13dc41dd"></script>
   <script src="js/analysis.js?v=0ba2e3b5"></script>
-  <script src="js/report.js?v=63bd2878"></script>
+  <script src="js/report.js?v=0c2c5c84"></script>
   <script src="js/categories.js?v=4ac81d98"></script>
   <script src="js/personas.js?v=cc4bfe12"></script>
   <script src="js/roles.js?v=dc9e3676"></script>
   <script src="js/cctv-list.js?v=0fc1b38e"></script>
   <script src="js/cctv-roads.js?v=e227588f"></script>
-  <script src="js/cameras.js?v=1d03d02c"></script>
+  <script src="js/cameras.js?v=dd2df110"></script>
   <script src="js/cache.js?v=68c050c3"></script>
-  <script src="js/datasource.js?v=d4bb30de"></script>
+  <script src="js/datasource.js?v=1c671fe8"></script>
   <script src="js/ui/dom.js?v=3bbe77ca"></script>
-  <script src="js/ui/image-viewer.js?v=fecf92df"></script>
-  <script src="js/ui/legend.js?v=9ce7a18d"></script>
-  <script src="js/ui/spot-layer.js?v=5c39563c"></script>
+  <script src="js/ui/image-viewer.js?v=6a8a30bc"></script>
+  <script src="js/ui/legend.js?v=ded0fb12"></script>
+  <script src="js/ui/spot-layer.js?v=b2d0bb5a"></script>
   <script src="js/ui/map-sheet.js?v=0224d1ad"></script>
   <script src="js/ui/weather-layer.js?v=7f4001f8"></script>
   <script src="js/ui/rankings.js?v=a7a8d6e5"></script>
   <script src="js/ui/detections-list.js?v=5b567c41"></script>
-  <script src="js/ui/search-panel.js?v=06fc951a"></script>
-  <script src="js/ui/cameras-layer.js?v=b32aa74f"></script>
+  <script src="js/ui/search-panel.js?v=101b9c8c"></script>
+  <script src="js/ui/cameras-layer.js?v=1d9e5711"></script>
   <script src="js/ui/fill-form.js?v=89452058"></script>
   <script src="js/ui/login.js?v=34089b34"></script>
   <script src="js/ui/write-card.js?v=04d70dea"></script>
-  <script src="js/ui/route-panel.js?v=64fbe089"></script>
+  <script src="js/ui/route-panel.js?v=520db64a"></script>
   <script src="js/ui/ai-dialog.js?v=b52b4075"></script>
-  <script src="js/ui/tour.js?v=c7edadb6"></script>
-  <script src="js/ui/admin-view.js?v=1060fec0"></script>
+  <script src="js/ui/tour.js?v=b0cbc3f8"></script>
+  <script src="js/ui/settings.js?v=f880824e"></script>
+  <script src="js/ui/feedback.js?v=347769f5"></script>
+  <script src="js/ui/admin-view.js?v=250359ae"></script>
   <script src="js/detect-client.js?v=40c825a4"></script>
   <script src="js/ui/detect-console.js?v=d842bdb7"></script>
-  <script src="js/heatmap.js?v=0a08f2b3"></script>
+  <script src="js/heatmap.js?v=aef80ce6"></script>
 </body>
 </html>

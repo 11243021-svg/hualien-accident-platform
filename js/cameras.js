@@ -48,18 +48,19 @@
   }
 
   function withStats(cameras, detections) {
-    const list = cameras.map((c) => Object.assign({}, c, { count: 0, real: 0, latest: null }));
+    const list = cameras.map((c) => Object.assign({}, c, { count: 0, real: 0, test: 0, latest: null }));
     const find = (camera) => list.find((c) => c.liveUrl === camera || c.id === camera);
     detections.forEach((d) => {
       if (!d.camera) return;
       let cam = find(d.camera);
       if (!cam && d.source === "real" && THB_URL.test(d.camera)) {
-        cam = { id: idFromUrl(d.camera), name: `公路局 ${idFromUrl(d.camera)}`, lat: d.lat, lon: d.lon, liveUrl: d.camera, videos: [], count: 0, real: 0, latest: null };
+        cam = { id: idFromUrl(d.camera), name: `公路局 ${idFromUrl(d.camera)}`, lat: d.lat, lon: d.lon, liveUrl: d.camera, videos: [], count: 0, real: 0, test: 0, latest: null };
         list.push(cam);
       }
       if (!cam) return;
       cam.count += 1;
       if (d.source === "real") cam.real += 1; // 真實偵測件數，顯示在監視器圖示的數字小標籤
+      if (d.source === "test") cam.test += 1;
       if (!cam.latest || d.ts > cam.latest) cam.latest = d.ts;
     });
     return list;

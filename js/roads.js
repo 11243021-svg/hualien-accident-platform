@@ -199,8 +199,61 @@
     return Math.round(8 + 28 * Math.sqrt(Math.max(0, value) / maxValue));
   }
 
+  // ===== 路名容錯（使用者測試 11/18：打「台九線」「花蓮中正路」「中山陸」都查不到）=====
+  const toHalf = (t) => String(t || "").replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  const CN_DIGIT = { 零: 0, 〇: 0, 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  // 國字數字 → 阿拉伯數字（只處理到 999，省道編號夠用）：九→9、十一→11、一百九十三→193
+  function cnToNum(s) {
+    let total = 0, cur = 0;
+    for (const ch of s) {
+      if (ch in CN_DIGIT) cur = CN_DIGIT[ch];
+      else if (ch === "十") { total += (cur || 1) * 10; cur = 0; }
+      else if (ch === "百") { total += (cur || 1) * 100; cur = 0; }
+      else return null;
+    }
+    return total + cur;
+  }
+  // 搜尋字串整理：去空白、限 30 字、臺→台、全形數字→半形、「台九線」→「台9線」、去掉開頭的「花蓮縣／花蓮」（「花蓮市」是鄉鎮名，保留）
+  const QUERY_MAX = 30;
+  function normalizeQuery(q) {
+    let s = toHalf(q).replace(/\s+/g, "").slice(0, QUERY_MAX).replace(/臺/g, "台");
+    s = s.replace(/台([零〇一二兩三四五六七八九十百]+)(?=線|號)/g, (m, cn) => {
+      const n = cnToNum(cn);
+      return n === null ? m : `台${n}`;
+    });
+    s = s.replace(/^花蓮縣/, "").replace(/^花蓮(?!市)/, "");
+    return s;
+  }
+  // 兩個字串差幾個字（編輯距離）
+  function editDistance(a, b) {
+    const m = a.length, n = b.length;
+    const d = Array.from({ length: m + 1 }, (_, i) => [i].concat(new Array(n).fill(0)));
+    for (let j = 1; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+    }
+    return d[m][n];
+  }
+  // 查不到時「你是不是要找…」：從真實路名裡挑最像的幾條（差 1～2 個字，或包含大部分的字）
+  function suggestRoads(query, roadNames, n = 3) {
+    const q = normalizeQuery(query);
+    if (!q || q.length < 2) return [];
+    const names = [...new Set((roadNames || []).filter(Boolean).map(normRoad))];
+    const scored = names.map((name) => {
+      const base = name.replace(/[一二三四五六七八九十]+段$/, "");
+      const dist = Math.min(editDistance(q, name), editDistance(q, base));
+      const shared = [...new Set(q)].filter((ch) => name.includes(ch)).length / new Set(q).size;
+      return { name: base, dist, shared };
+    }).filter((x) => x.dist <= Math.max(1, Math.floor(q.length / 3)) || x.shared >= 0.75);
+    const seen = new Set();
+    return scored.sort((a, b) => a.dist - b.dist || b.shared - a.shared || a.name.length - b.name.length || a.name.localeCompare(b.name, "zh-Hant"))
+      .filter((x) => !seen.has(x.name) && seen.add(x.name)).slice(0, n).map((x) => x.name);
+  }
+
   function matchRoad(ev, query) {
-    const norm = (t) => t.replace(/[\s,，]/g, "").replace(/(\d+)段/g, (m, n) => (DIGIT_CN[Number(n)] || n) + "段");
+    const norm = (t) => toHalf(t).replace(/臺/g, "台").replace(/[\s,，]/g, "").replace(/(\d+)段/g, (m, n) => (DIGIT_CN[Number(n)] || n) + "段");
     const noSection = (t) => t.replace(/[一二三四五六七八九十]+段/g, "");
     const q = norm(query || "");
     if (!q) return false;
@@ -216,11 +269,11 @@
   // 搜尋找不到時的提示：期間不是 5 年就建議放寬；打了巷弄門牌就建議只打路名
   function noResultText(query, periodLabel) {
     const tips = [];
-    if (periodLabel && periodLabel !== "最近 5 年") tips.push("上方「看什麼時候」改選「全部 5 年」");
     const road = (query.match(/^.*?(?:路|街|大道)(?:[一二三四五六七八九十\d]+段)?/) || [])[0];
     if (road && road !== query) tips.push(`只打路名「${road}」`);
-    if (!tips.length) tips.push("只打路名，例如 建國路");
-    return `${periodLabel || ""}找不到「${query}」的車禍或偵測紀錄。可以試試：${tips.join("，或")}。`;
+    else tips.push("只打路名，例如 建國路");
+    if (periodLabel && !/^最近 5 年/.test(periodLabel)) tips.push("上方「看什麼時候」改選「全部 5 年」");
+    return `${periodLabel || ""}找不到「${query}」。請確認路名有沒有打錯，或試試：${tips.join("，或")}。`;
   }
 
   const uniqSorted = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
@@ -279,7 +332,7 @@
   const api = {
     TIERS, METRIC_LABEL, extractRoad, normRoad, roadBase, roadKey, spotOf, spotsText, annotateAccidents, annotateDetections,
     metricValue, tierOf, aggregateRoads, circleRadius, roadLimit, visibleRoads, zoomScale, spotScale, nearestPoint, pointsAt, matchRoad, noResultText, towns, villages, dataYears, inLastYears, comparePrev,
-    inPeriodYears, compareYear, denseBounds,
+    inPeriodYears, compareYear, denseBounds, normalizeQuery, suggestRoads, editDistance, QUERY_MAX,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HotRoads = api;

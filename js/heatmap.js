@@ -13,10 +13,9 @@
   const UI = window.HotUI;
   const el = UI.el;
   // mayorScale：里長要看路段圓圈，熱度圖淡一點才不會蓋住圓圈
-  const HEAT = { radius: 12, blur: 15, intensity: 0.03, mayorScale: 0.6 };
+  const HEAT = { radius: 12, blur: 15, intensity: 0.03 };
   const VIEW = { hualien: [23.85, 121.55, 10], tainan: [23.0, 120.25, 11] };
   const POINTS_ZOOM = 13; // 放大到這個層級以上畫個別車禍點（上萬筆，太遠畫會卡）
-  const SEARCH_POINTS_MAX = 3000; // 民眾查詢結果超過這麼多件就維持熱度圖，不畫個別點
   const MIN_COUNT_FLOOR = 10; // 路段分級最低一級是 10 件，門檻低於 10 也不會多畫
   const PLAY_INTERVAL_MS = 1000;
   const REGION_LABEL = { hualien: "花蓮", tainan: "台南" };
@@ -50,6 +49,7 @@
     query: "",
     selectedRoadKey: null,
     filtersOpen: false, // 「看哪種」預設收起
+    roadPick: "", // 查詢結果裡選的那一條路段（roadKey）；空＝看全部同名路段
     accView: "spot", // 車禍呈現方式：spot＝斑點圖（每件事故一個點，預設）、heat＝熱度圖
     anaTab: "hour", // 事故分析目前看哪一張：hour／week／year／town／cause／type
     verifyOnly: false, // 偵測事件清單只看還沒確認 AI 判斷的
@@ -63,6 +63,7 @@
   let toastTimer = null;
   let accDrawn = null; // 上次算斑點時的條件（資料、縮放、身分、選取路段）：都沒變就不重算
   let regionMsg = false; // mapMsg 目前顯示的是不是地區載入訊息
+  let lastMapView = "spot"; // 從安全指數切回「事故最多」時，回到原本的斑點圖或熱度圖
   let session = null; // 登入狀態：null 或 { id, email, name, role, town }（role 為 null＝還沒設定身分）
   let loginDialog = null;
   let writeCard = null;
@@ -76,6 +77,8 @@
   const FILL_CAUSES_N = 15; // 補填肇因下拉列出歷史資料最常見的幾項
 
   const $ = (id) => document.getElementById(id);
+  const isSimple = () => document.documentElement.dataset.mode === "simple";
+  const SIMPLE_TABS = ["hour", "week"]; // 簡易模式的事故分析只留時段、星期
   const persona = () => P.PERSONAS[app.persona];
   const pad2 = (n) => String(n).padStart(2, "0");
   const hasYears = () => app.region === "hualien" && R.dataYears(data.accidents.hualien || []).end !== null;
@@ -83,7 +86,11 @@
 
   // 期間文字：「最近 3 年」或「112 年」
   function periodText() {
-    return app.period.kind === "year" ? `${app.period.y - ROC} 年（${app.period.y}）` : `最近 ${app.period.n} 年`;
+    if (app.period.kind === "year") return `${app.period.y - ROC} 年（${app.period.y}）`;
+    const end = R.dataYears(data.accidents[app.region] || []).end;
+    if (!end) return `最近 ${app.period.n} 年`;
+    const a = end - app.period.n + 1 - ROC, b = end - ROC;
+    return `最近 ${app.period.n} 年（${a === b ? a : `${a}–${b}`} 年）`;
   }
 
   // info＝一般提示（例：載入中），不用錯誤的紅色
@@ -140,7 +147,8 @@
       (anyTown || !app.town || ev.town === app.town) &&
       (!app.weathers.size || app.weathers.has(ev.weatherG)) &&
       (!app.types.size || app.types.has(ev.typeG)) &&
-      (!app.query || R.matchRoad(ev, app.query));
+      (!app.query || R.matchRoad(ev, app.query)) &&
+      (!app.roadPick || ev.roadKey === app.roadPick);
   }
 
   // 來源（真實／模擬）三種身分都能選；種類、補填狀態只在員警的篩選列出現，所以只有員警套用
@@ -152,7 +160,8 @@
       (!app.weathers.size || app.weathers.has(ev.weatherG)) &&
       (!app.town || ev.town === app.town) &&
       (!app.village || ev.village === app.village) &&
-      (!app.query || R.matchRoad(ev, app.query));
+      (!app.query || R.matchRoad(ev, app.query)) &&
+      (!app.roadPick || ev.roadKey === app.roadPick);
   }
 
   function compute() {
@@ -163,8 +172,8 @@
     const accNoTime = useYears ? base.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : base;
     const acc = accNoTime.filter(inTime);
     const det = app.region === "hualien" ? data.detections.filter(matchDetection) : [];
-    // 路段統計納入目前勾選來源的偵測事件（預設真實＋模擬，只勾真實就只算真實）
-    const roads = R.aggregateRoads(acc.concat(det), app.metric)
+    // 路段排行只算政府的車禍資料（AI 偵測事件的傷亡是人工補填的，混進來會讓數字對不上）
+    const roads = R.aggregateRoads(acc, app.metric)
       .filter((r) => r.tier && r.count >= app.minCount);
     let compare = null;
     if (useYears) {
@@ -175,13 +184,16 @@
     const routeBase = accAll.filter((ev) => app.severities.has(ev.severity) &&
       (!app.weathers.size || app.weathers.has(ev.weatherG)) && (!app.types.size || app.types.has(ev.typeG)));
     const accRoute = (useYears ? routeBase.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : routeBase).filter(inTime);
-    // 道路安全指數：件數、嚴重程度跟著目前篩選；趨勢用「不受期間篩選」的資料比近一年 vs 前一年
-    const safety = window.HotSafety.scoreRoads(acc, base.filter(inTime), lastAccidentTs(accAll));
+    // 道路安全指數：全縣一起算（不受鄉鎮、路名搜尋影響，同一條路在哪裡看分數都一樣）；
+    // 件數、嚴重程度跟著期間、嚴重度、天候、型態、時段；趨勢用「不受期間篩選」的資料比近一年 vs 前一年
+    const safetyAll = window.HotSafety.scoreRoads(accRoute, routeBase.filter(inTime), lastAccidentTs(accAll));
+    const keys = app.query ? new Set(acc.map((e) => e.roadKey)) : null;
+    const safety = safetyAll.filter((r) => (!app.town || r.town === app.town) && (!keys || keys.has(r.key)));
     // 事故分析：年度趨勢固定看全部年份（不套期間）；鄉鎮比較固定看全部鄉鎮（不套鄉鎮），其他條件照算
     const yearBase = base.filter(inTime);
     const townAll = accAll.filter((ev) => matchAccident(ev, true));
     const townBase = (useYears ? townAll.filter((ev) => R.inPeriodYears(ev, app.period, span.end)) : townAll).filter(inTime);
-    return { span, acc, det, roads, hourBase: accNoTime, yearBase, townBase, compare, accRoute, safety, safetyMap: new Map(safety.map((r) => [r.key, r])) };
+    return { span, acc, det, roads, hourBase: accNoTime, yearBase, townBase, compare, accRoute, safety, safetyMap: new Map(safetyAll.map((r) => [r.key, r])) };
   }
 
   // 這個地區車禍資料的最後一筆時間（安全指數算趨勢用；每個地區只算一次）
@@ -193,7 +205,25 @@
 
   // ===== 地圖 =====
   function initMap() {
-    map = L.map("map", { preferCanvas: true, maxZoom: 18 });
+    // 地圖不亂跑：電腦要按住 Ctrl 才用滾輪縮放、手機要兩指才移動，單指照常捲頁面（使用者測試 11/18）
+    const gesture = !!window.leafletGestureHandling; // 手勢套件沒載到（例如沒網路）就照舊
+    map = L.map("map", Object.assign({ preferCanvas: true, maxZoom: 18 }, gesture ? {
+      gestureHandling: true,
+      gestureHandlingOptions: { text: { touch: "用兩指移動地圖", scroll: "按住 Ctrl＋滾輪縮放地圖", scrollMac: "按住 ⌘＋滾輪縮放地圖" }, duration: 1200 },
+    } : {}));
+    const home = L.control({ position: "topleft" });
+    home.onAdd = () => {
+      const b = el("button", "map-home", "回到全景");
+      b.type = "button";
+      b.title = "地圖拉回一開始的範圍";
+      L.DomEvent.disableClickPropagation(b);
+      b.addEventListener("click", () => {
+        closePopup();
+        fitDense();
+      });
+      return b;
+    };
+    home.addTo(map);
     // Esri 深灰底圖（免金鑰，雙擊 file:// 打開也不會被擋）
     const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
     const tiles = L.tileLayer(ESRI + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
@@ -316,28 +346,37 @@
     if (c.hint) box.append(el("small", "acc-card__hint", c.hint));
   }
 
-  // 交通警察隊看截圖後確認：AI 判斷正確／誤判（用來算 AI 正確率）
-  function verifyBox(ev) {
+  // 交通警察隊看截圖後確認：判斷正確／誤判／看不清楚（看不清楚不列入正確率）
+  // 只看「本筆」那一個框：種類對不對、在不在圍籬內、是不是真的停留；其他框不用管
+  const VERIFY_TOAST = {
+    correct: "已確認：AI 判斷正確",
+    wrong: "已確認：AI 誤判（系統管理員可在誤報清單把它從地圖隱藏）",
+    unclear: "已記下：看不清楚，這筆不列入正確率",
+  };
+  function verifyBox(ev, onDone) {
     const box = el("div", "verify");
-    // 寫清楚 AI 判斷了什麼，大家標記的標準才一致（算的是「偵測正確率」：圍籬內真的有這個東西停留，不是判斷是不是事故）
+    const kind = D.KIND_SCOPE[ev.kind] || F.KIND_LABEL[ev.kind] || "物體";
     const claim = el("p", "verify__claim");
-    claim.append("AI 判斷：圍籬內有「", el("b", null, F.KIND_LABEL[ev.kind] || "物體"), "」停留超過設定秒數。");
-    if (D.hasTargetMark(ev)) claim.append("請看截圖中", el("b", null, "紅色粗框、標「本筆」"), "的物體，其他框是另外的事件。");
-    else if (D.BOX_LABEL[ev.kind]) claim.append("請看截圖中標示「", el("b", null, D.BOX_LABEL[ev.kind]), "」的紅框，其他框是另外的事件。");
-    box.append(claim, el("p", "verify__q", "看完截圖，這個判斷對嗎？"));
+    claim.append("AI 判斷：圍籬內有「", el("b", null, kind), "」停留超過設定秒數。");
+    if (D.hasTargetMark(ev)) claim.append("只看截圖中", el("b", null, "紅色粗框、標「本筆」"), "的那一個，其他框不用管。");
+    else if (D.BOX_LABEL[ev.kind]) claim.append("只看截圖中標示「", el("b", null, D.BOX_LABEL[ev.kind]), "」的紅框，其他框不用管。");
+    const checks = el("ul", "verify__checks");
+    ["種類對嗎？", "在圍籬（畫的範圍）裡面嗎？", "真的停在那裡，不是剛好經過？"].forEach((t) => checks.append(el("li", null, t)));
+    box.append(claim, el("p", "verify__q", "三個都對才按「判斷正確」："), checks);
     const btns = el("div", "verify__btns");
     const msg = el("p", "pop__note");
-    const make = (correct, text, cls) => {
-      const b = el("button", `verify__btn ${cls}${ev.verdict === (correct ? "correct" : "wrong") ? " is-on" : ""}`, text);
+    const make = (verdict, text, cls) => {
+      const b = el("button", `verify__btn ${cls}${ev.verdict === verdict ? " is-on" : ""}`, text);
       b.type = "button";
       b.addEventListener("click", async () => {
         btns.querySelectorAll("button").forEach((x) => (x.disabled = true));
         msg.textContent = "儲存中…";
         try {
-          const updated = await window.HotData.auth.verify(ev.id, correct);
-          applyUpdate(Object.assign({}, ev, updated || {}));
-          closePopup();
-          showToast(correct ? "已確認：AI 判斷正確" : "已確認：AI 誤判（系統管理員可在誤報清單把它從地圖隱藏）");
+          const updated = Object.assign({}, ev, await window.HotData.auth.verify(ev.id, verdict) || {});
+          applyUpdate(updated);
+          refreshAccuracy();
+          showToast(VERIFY_TOAST[verdict]);
+          if (onDone) onDone(updated); // 小卡片不關：重畫判斷結果，補填表單打到一半的字還在
         } catch (err) {
           msg.textContent = "確認失敗：" + err.message;
           btns.querySelectorAll("button").forEach((x) => (x.disabled = false));
@@ -345,10 +384,18 @@
       });
       return b;
     };
-    btns.append(make(true, "✓ 判斷正確", "is-ok"), make(false, "✗ 誤判", "is-bad"));
+    btns.append(make("correct", "✓ 判斷正確", "is-ok"), make("wrong", "✗ 誤判", "is-bad"), make("unclear", "？ 看不清楚（不列入計算）", "is-unclear"));
     box.append(btns, msg);
     return box;
   }
+
+  // 正確率由資料庫算（含已標誤報的事件）；失敗就留著 null，畫面改用看得到的資料算
+  async function refreshAccuracy() {
+    data.accuracy = await window.HotData.accuracy();
+    if (view && P.visibility(app.persona).panels.detPanel) renderPanels();
+  }
+
+  const verdictText = (ev) => (ev.verdict ? `${D.VERDICT_LABEL[ev.verdict]}（${ev.verifiedBy}${ev.verifiedAt ? "・" + ev.verifiedAt.slice(5, 16).replace("T", " ") : ""}）` : "待確認");
 
   function detPopup(ev) {
     const box = el("div", "pop");
@@ -371,13 +418,17 @@
       ["傷亡", ev.deaths === null && ev.injuries === null ? "待補填" : `死亡 ${ev.deaths ?? "—"}、受傷 ${ev.injuries ?? "—"}`],
       ["肇因", ev.cause || "待補填"],
       ["事故型態", ev.accidentType || (ev.filledBy ? "—" : "待補填")],
-      ...(ev.source !== "sim" ? [["AI 判斷", ev.verdict ? `${D.VERDICT_LABEL[ev.verdict]}（${ev.verifiedBy}${ev.verifiedAt ? "・" + ev.verifiedAt.slice(5, 16).replace("T", " ") : ""}）` : "待確認"]] : []),
+      ...(ev.source !== "sim" ? [["AI 判斷", verdictText(ev)]] : []),
       ...(ev.filledBy ? [["補填者", D.fillText(ev)]] : []),
     ];
     const section = (title, list, cls) => {
       box.append(el("div", `pop__sec ${cls}`, title));
       const dl = el("dl", "pop__rows");
-      list.forEach(([k, v]) => dl.append(el("dt", null, k), el("dd", null, v || "—")));
+      list.forEach(([k, v]) => {
+        const dd = el("dd", null, v || "—");
+        if (k === "AI 判斷") dd.dataset.verdictRow = "1";
+        dl.append(el("dt", null, k), dd);
+      });
       box.append(dl);
     };
     box.append(head);
@@ -392,7 +443,16 @@
     } else {
       box.append(el("p", "pop__note", ev.source !== "sim" ? "截圖檔遺失" : "模擬資料，無截圖"));
     }
-    if (app.persona === "police" && ev.source !== "sim" && Roles.canFill(myRole())) box.append(verifyBox(ev));
+    if (app.persona === "police" && ev.source !== "sim" && Roles.canFill(myRole())) {
+      const slot = el("div");
+      const put = (cur) => {
+        slot.replaceChildren(verifyBox(cur, put));
+        const dd = box.querySelector("[data-verdict-row]");
+        if (dd) dd.textContent = verdictText(cur);
+      };
+      put(ev);
+      box.append(slot);
+    }
     if (app.persona === "police") {
       if (Roles.canFill(myRole())) box.append(UI.fillForm(ev, fillCauses(), (v) => saveFill(ev, v)));
       else if (!session) box.append(el("p", "pop__note", "交通警察隊登入後可以在這裡補填傷亡與肇因"));
@@ -452,7 +512,8 @@
   async function setSession(state) {
     session = state;
     renderAuth();
-    stopPlay();
+    renderRange();
+    stopPlay(true);
     closePopup(); // 小卡片要重開才會出現／收起補填表單
     app.persona = Roles.defaultView(myRole());
     app.selectedRoadKey = null;
@@ -493,7 +554,7 @@
 
   function drawAccidents() {
     if (!view) return;
-    // 斑點圖：每件事故一個點（縮小也畫）；熱度圖：縮小時畫熱度雲，放大到街道或查詢結果不多才畫點
+    // 斑點圖：每件事故一個點；熱度圖：不論縮放都只畫熱度（兩種畫面才看得出差別）
     const zoom = map.getZoom();
     if (app.accView === "safety") { // 安全指數畫面只畫路段圓圈，車禍點不畫（不然太擠）
       heatLayer.setLatLngs([]);
@@ -502,20 +563,18 @@
       return;
     }
     const spot = app.accView === "spot";
-    const showPts = spot || zoom >= POINTS_ZOOM || (!!app.query && view.acc.length <= SEARCH_POINTS_MAX);
+    const showPts = spot;
     // 資料、縮放、身分、選取的路段都沒變就不用重算（平移地圖由斑點圖層自己重畫）
     const key = { view, spot, zoom, showPts, persona: app.persona, sel: app.selectedRoadKey };
     if (accDrawn && Object.keys(key).every((k) => accDrawn[k] === key[k])) return;
     accDrawn = key;
-    const k = persona().layers.roads ? HEAT.intensity * HEAT.mayorScale : HEAT.intensity;
-    heatLayer.setLatLngs(showPts ? [] : view.acc.map((e) => [e.lat, e.lon, k]));
+    heatLayer.setLatLngs(showPts ? [] : view.acc.map((e) => [e.lat, e.lon, HEAT.intensity]));
     if (!showPts) {
       map.removeLayer(accLayer);
       return;
     }
     const scale = R.spotScale(zoom); // 縮小時點小一點，才不會糊成一片
     const sel = app.selectedRoadKey;
-    const mayor = app.persona === "mayor"; // 公路局畫面以路段圓圈為主，車禍點改小改淡
     // 死亡事故後畫（疊在最上面）、點大一點，才不會被一大片受傷事故蓋住
     const ordered = view.acc.filter((e) => e.severity !== "death").concat(view.acc.filter((e) => e.severity === "death"));
     accLayer.setItems(ordered.map((ev) => {
@@ -523,9 +582,10 @@
       return {
         lat: ev.lat,
         lon: ev.lon,
-        r: Math.max(2, ((mayor ? 3.5 : 5.5) + (ev.severity === "death" ? 2.5 : 0)) * scale),
+        r: Math.max(2, (5.5 + (ev.severity === "death" ? 2.5 : 0)) * scale),
         fill: UI.sevColor(ev.severity, F.hourOf(ev.ts)), // 白天淺、晚上深
-        alpha: dim ? 0.15 : mayor ? 0.6 : 0.95,
+        alpha: dim ? 0.15 : 0.95,
+        ring: ev.severity === "death", // 死亡點加白框：色弱的人也分得出死亡和受傷
         ref: ev,
       };
     }));
@@ -576,20 +636,21 @@
   }
 
   const legendState = () => ({
-    persona: app.persona, metric: app.metric, region: app.region, accView: app.accView,
+    persona: app.persona, metric: app.metric, region: app.region, accView: app.accView, road: !!app.selectedRoadKey,
     weather: $("weatherToggle").checked && app.region === "hualien",
   });
 
   // ===== 道路安全指數 =====
   const SAFETY_COLOR = { danger: "#5a189a", warn: "#9d4edd", safe: "#e0aaff" };
-  const SAFETY_TEXT = "分數越低越危險：事故件數 40%＋嚴重程度（死亡×10、受傷×1）40%＋近一年趨勢 20%。分數最低的前 10% 路段標「危險」，接下來 30% 標「注意」";
+  const SAFETY_TEXT = "危險度 0～100，越高越危險：事故件數 40%＋嚴重程度（死亡×10、受傷×1）40%＋近一年趨勢 20%。危險度最高的前 10% 路段標「危險」，接下來 30% 標「注意」";
+  const danger = (r) => (r.score === null ? null : 100 - r.score); // 安全指數反過來，一般人比較直覺
 
   function safetyPopup(r) {
     const S = window.HotSafety;
     const box = el("div", "pop");
     box.append(el("div", "pop__head", `${r.town} ${r.road}`));
     const big = el("p", `safety-big is-${r.level.key}`);
-    big.append(el("b", null, r.score === null ? "—" : String(r.score)), el("span", null, r.score === null ? "資料不足（少於 3 件）" : ` 分・${r.level.label}`));
+    big.append(el("b", null, r.score === null ? "—" : String(danger(r))), el("span", null, r.score === null ? "資料不足（少於 3 件）" : `・${r.level.label}（危險度，越高越危險）`));
     box.append(big);
     const dl = el("dl", "pop__rows");
     const pct = (p) => `${Math.round(p * 100)}%`;
@@ -615,7 +676,7 @@
         radius: Math.max(6, Math.round(R.circleRadius(r.count, max) * scale)),
         color, weight: 1, fillColor: color, fillOpacity: 0.55,
       });
-      m.bindTooltip(() => el("span", null, `${r.town} ${r.road}：安全指數 ${r.score} 分・${r.level.label}`), TIP_OPTS);
+      m.bindTooltip(() => el("span", null, `${r.town} ${r.road}：危險度 ${danger(r)}・${r.level.label}`), TIP_OPTS);
       m.on("click", () => openPopup(r.lat, r.lon, safetyPopup(r)));
       m.addTo(roadLayer);
       const rank = rankOf.get(r.key);
@@ -629,13 +690,20 @@
     restack();
   }
 
-  // 地圖下方：最危險的前 10 條路段
+  // 沒有右側排行的畫面（交通警察隊）：安全指數排行放地圖下方
   function renderSafetyPanel() {
     const box = $("safetyPanel");
-    box.hidden = app.accView !== "safety";
+    box.hidden = app.accView !== "safety" || P.visibility(app.persona).panels.rankPanel;
     if (box.hidden || !view) return;
-    const rows = view.safety.filter((r) => r.score !== null).slice(0, 10);
-    box.replaceChildren(el("h2", "safety-panel__title", "安全指數排行：最該優先改善的前 10 條"), el("p", "safety-panel__note", SAFETY_TEXT + (app.persona === "mayor" ? "。（右邊的件數排行只看次數；這裡再加上死傷嚴重程度與近一年趨勢）" : "")));
+    box.replaceChildren(el("h2", "safety-panel__title", "最該優先改善的路段"));
+    safetyList(box);
+  }
+
+  // 安全指數前 10 名（越低越危險）
+  function safetyList(box) {
+    const all = view.safety.filter((r) => r.score !== null);
+    const rows = all.slice(0, 10);
+    box.append(el("p", "safety-panel__note", `把出事次數、死傷嚴重程度、近一年有沒有變多一起算成「危險度」0～100，越高越該先改善（所以不一定是出事最多的路排第一）。前 10 名（共 ${all.length.toLocaleString()} 條有分數）`));
     if (!rows.length) {
       box.append(el("p", "search__hint", "這個條件下沒有足夠的事故資料（每條路段至少要 3 件才會計算）"));
       return;
@@ -648,7 +716,7 @@
       b.append(
         el("span", "safety-item__no", String(i + 1)),
         el("span", "safety-item__name", `${r.town} ${r.road}`),
-        el("span", `safety-item__score is-${r.level.key}`, `${r.score} 分・${r.level.label}`),
+        el("span", `safety-item__score is-${r.level.key}`, `危險度 ${danger(r)}・${r.level.label}`),
         el("span", "safety-item__sub", `${r.count.toLocaleString()} 件・死亡 ${r.deaths}・受傷 ${r.injuries.toLocaleString()}・趨勢 ${arrow}`),
       );
       b.addEventListener("click", () => {
@@ -660,18 +728,18 @@
       li.append(b);
       ol.append(li);
     });
-    box.append(ol);
+    box.append(ol, el("p", "safety-panel__note safety-panel__how", SAFETY_TEXT));
   }
 
   function drawRoads() {
     roadLayer.clearLayers();
     if (app.accView === "safety") return drawSafety(); // 安全指數畫面：每種身分都看路段安全等級
-    if (!persona().layers.roads) return;
+    if (!persona().layers.roads || !app.selectedRoadKey) return;
     const max = view.roads.reduce((m, r) => Math.max(m, r.value), 0);
     const zoom = map.getZoom();
     const scale = R.zoomScale(zoom);
     const rankOf = new Map(view.roads.slice(0, 10).map((r, i) => [r.key, i + 1]));
-    R.visibleRoads(view.roads, zoom, app.selectedRoadKey).forEach((r) => {
+    view.roads.filter((r) => r.key === app.selectedRoadKey).forEach((r) => {
       const selected = r.key === app.selectedRoadKey;
       const color = UI.TIER_COLOR[r.tier];
       const radius = Math.max(6, Math.round(R.circleRadius(r.value, max) * scale));
@@ -774,13 +842,13 @@
       $("statInjuries").textContent = view.det.filter((e) => e.ts.slice(0, 10) === today).length.toLocaleString();
       return;
     }
-    setLabel("statTotalLabel", hasYears() ? `車禍件數（${periodText()}）` : "車禍件數");
+    setLabel("statTotalLabel", hasYears() ? `車禍件數・${periodText()}` : "車禍件數");
     setLabel("statDeathsLabel", "死亡人數", "dot--death");
     setLabel("statInjuriesLabel", "受傷人數", "dot--injury");
     $("statTotal").textContent = view.acc.length.toLocaleString();
     $("statDeaths").textContent = view.acc.reduce((s, e) => s + (e.deaths || 0), 0).toLocaleString();
     $("statInjuries").textContent = view.acc.reduce((s, e) => s + (e.injuries || 0), 0).toLocaleString();
-    if (!view.compare || app.persona !== "mayor") return;
+    if (!view.compare) return;
     if (view.compare.previous === null) {
       delta.textContent = "沒有更早的資料可以比較";
       return;
@@ -796,18 +864,26 @@
     const vis = P.visibility(app.persona);
     Object.entries(vis.panels).forEach(([id, on]) => ($(id).hidden = !on));
     if (vis.panels.rankPanel) {
-      // 兩個排行講清楚差別：這裡看「哪裡最常出事」；安全指數再加上嚴重程度與趨勢，看「哪裡最該先改善」
-      $("rankTitle").textContent = `${R.METRIC_LABEL[app.metric]}排行`;
-      const notes = [`看哪裡最常出事：依${R.METRIC_LABEL[app.metric]}排名，列出出事 ${app.minCount} 次以上的 ${view.roads.length} 條路。要排「先改善哪裡」，請切到地圖上方的「安全指數」`];
-      if (app.village) notes.push("車禍資料沒有里別，路段以鄉鎮統計；里別只篩選 AI 偵測事件");
-      UI.rankings.render($("rankList"), $("rankNote"), view.roads, { metric: app.metric, selectedKey: app.selectedRoadKey, note: notes.join("。") }, pickRoad);
-      $("csvBtn").disabled = !view.roads.length;
+      // 兩份排行放同一個面板、用頁籤切換：「事故最多」只看次數；「最該優先改善」再加上嚴重程度與趨勢
+      const safetyTab = app.accView === "safety" || isSimple(); // 簡易模式只留一份「最危險的路」
+      document.querySelectorAll("#rankTabs button").forEach((b) => setPressed(b, (b.dataset.rank === "safety") === safetyTab));
+      $("rankCount").hidden = safetyTab;
+      $("rankSafety").hidden = !safetyTab;
+      if (safetyTab) {
+        $("rankSafety").replaceChildren();
+        safetyList($("rankSafety"));
+      } else {
+        const notes = [`依${R.METRIC_LABEL[app.metric]}排名，點一條路會在地圖上標出它和最常出事的地方。前 10 名（共 ${view.roads.length.toLocaleString()} 條出事 ${app.minCount} 次以上）`];
+        if (app.village) notes.push("車禍資料沒有里別，路段以鄉鎮統計；里別只篩選 AI 偵測事件");
+        UI.rankings.render($("rankList"), $("rankNote"), view.roads, { metric: app.metric, selectedKey: app.selectedRoadKey, note: notes.join("。") }, pickRoad);
+      }
+      $("csvBtn").disabled = safetyTab ? !view.safety.some((r) => r.score !== null) : !view.roads.length;
       // AI 分析：只有登入的公路局、系統管理員看得到（後台也會再核對身分）
       $("aiBtn").hidden = !(myRole() === "mayor" || myRole() === "admin");
       $("aiBtn").disabled = !view.acc.length;
     }
     if (vis.panels.detPanel) {
-      const acc = D.accuracy(data.detections.filter((e) => !e.dismissed || e.verdict));
+      const acc = data.accuracy || D.accuracy(data.detections);
       const lv = D.listView(view.det, { verifyOnly: app.verifyOnly, shown: app.detShown });
       $("detNote").textContent = app.region !== "hualien" ? "這個地區沒有 AI 偵測資料"
         : `${app.verifyOnly ? "待確認" : "共"} ${lv.total.toLocaleString()} 筆，顯示最新 ${lv.items.length} 筆`;
@@ -819,15 +895,27 @@
     }
     if (vis.panels.searchPanel) {
       const periodLabel = hasYears() ? periodText() : "";
-      UI.search.render($("searchBody"), $("searchTitle"), { query: app.query, acc: view.acc, det: view.det, periodLabel, safety: view.safetyMap });
+      UI.search.render($("searchBody"), $("searchTitle"), {
+        query: app.query, acc: view.acc, det: view.det, periodLabel, safety: view.safetyMap,
+        groups: searchGroups(), picked: app.roadPick, onPick: pickSearchRoad,
+        suggestions: app.query && !view.acc.length && !view.det.length ? suggestFor(app.query) : [], onSuggest: runSearch,
+      });
     }
     if (vis.panels.analysisBox) renderAnalysis();
   }
 
   // ===== 事故分析：一個框、六個分頁（老師 11/9：管理單位和民眾關心的數據做成圖）=====
-  const ANA_TEAL = "#48c3ac", ANA_RED = "#ff4d4d", ANA_GOLD = "#f5c518";
+  let ANA_TEAL = "#48c3ac", ANA_TOP = "#f2f6fa", ANA_GOLD = "#f5c518"; // 紅色只留給「死亡」；「最多」用跟文字同色
   const TICK = { color: "#a2b0c0" };
   const GRID = { color: "rgba(255,255,255,0.08)" };
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  // 圖表顏色跟著畫面風格（深色／淺色／高對比）
+  function themeCharts() {
+    ANA_TOP = cssVar("--text") || "#f2f6fa";
+    ANA_TEAL = cssVar("--accent") || "#48c3ac";
+    TICK.color = cssVar("--text-mut") || "#a2b0c0";
+    GRID.color = document.documentElement.dataset.theme === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.08)";
+  }
   const shortLabel = (n) => function (v) { const s = this.getLabelForValue(v); return s.length > n ? s.slice(0, n) + "…" : s; };
   const barChart = (labels, data, colors, horizontal) => ({
     type: "bar",
@@ -848,18 +936,28 @@
     if (tab === "hour") {
       const hours = new Array(24).fill(0);
       view.hourBase.forEach((ev) => (hours[F.hourOf(ev.ts)] += 1));
-      const top = AN.topIndexes(hours, 3); // 最多的 3 個時段標紅；選了某個時段時，其他時段變淡
+      const top = AN.topIndexes(hours, 3); // 最多的 3 個時段特別標出；選了某個時段時，其他時段變淡
       const colors = hours.map((_, h) => {
         const on = F.isHourHighlighted(h, app.time);
-        if (top.includes(h)) return on ? ANA_RED : "rgba(255,77,77,0.3)";
+        if (top.includes(h)) return on ? ANA_TOP : "rgba(150,160,175,0.35)";
         return on ? ANA_TEAL : "rgba(72,195,172,0.22)";
       });
-      return { lead: AN.peakText(hours), note: "紅色＝最多的 3 個時段", config: barChart(hours.map((_, h) => String(h)), hours, colors) };
+      const topWord = document.documentElement.dataset.theme === "light" ? "深色" : "白色";
+      if (app.time.mode !== "all") { // 選了時段：結論講選到的時段，圖仍顯示全天方便比較
+        const inSel = hours.map((n, h) => (F.isHourHighlighted(h, app.time) ? n : 0));
+        const total = inSel.reduce((s, n) => s + n, 0);
+        return {
+          lead: `「${timeText()}」共 ${total.toLocaleString()} 件。` + (total ? AN.peakText(inSel).replace("車禍最多的時段是", "這段時間裡最多是") : ""),
+          note: `圖仍顯示全天 24 小時方便比較：亮的是你選的時段，${topWord}＝全天最多的 3 個時段`,
+          config: barChart(hours.map((_, h) => String(h)), hours, colors),
+        };
+      }
+      return { lead: AN.peakText(hours), note: `${topWord}＝最多的 3 個時段`, config: barChart(hours.map((_, h) => String(h)), hours, colors) };
     }
     if (tab === "week") {
       const c = AN.weekdayCounts(view.acc);
       const top = AN.topIndexes(c, 1);
-      return { lead: AN.weekdayText(c), note: "紅色＝最多的一天", config: barChart(AN.WEEKDAYS.map((d) => "週" + d), c, c.map((_, i) => (top.includes(i) ? ANA_RED : ANA_TEAL))) };
+      return { lead: AN.weekdayText(c), note: `${document.documentElement.dataset.theme === "light" ? "深色" : "白色"}＝最多的一天`, config: barChart(AN.WEEKDAYS.map((d) => "週" + d), c, c.map((_, i) => (top.includes(i) ? ANA_TOP : ANA_TEAL))) };
     }
     if (tab === "year") {
       const rows = AN.yearlyStats(view.yearBase);
@@ -877,7 +975,7 @@
           },
           options: {
             animation: false, responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: "#c9d4df", boxWidth: 12 } }, tooltip: { callbacks: { label: (item) => `${item.dataset.label} ${item.raw.toLocaleString()}` } } },
+            plugins: { legend: { labels: { color: TICK.color, boxWidth: 12 } }, tooltip: { callbacks: { label: (item) => `${item.dataset.label} ${item.raw.toLocaleString()}` } } },
             scales: { x: { ticks: TICK, grid: { display: false } }, y: { beginAtZero: true, ticks: { ...TICK, precision: 0 }, grid: GRID } },
           },
         },
@@ -915,6 +1013,8 @@
       setPressed(b, b.dataset.tab === app.anaTab);
       b.setAttribute("aria-selected", String(b.dataset.tab === app.anaTab));
     });
+    themeCharts();
+    if (isSimple() && !SIMPLE_TABS.includes(app.anaTab)) app.anaTab = "hour";
     const spec = analysisSpec(app.anaTab);
     $("anaLead").textContent = spec.lead || "這個條件下沒有資料。";
     $("anaNote").textContent = spec.note || "";
@@ -939,8 +1039,8 @@
     renderTimeFold();
     $("regionNote").hidden = app.region !== "tainan";
     $("mapTip").textContent = HOVER
-      ? "小技巧：點地圖上的點看詳細資料；滾輪放大縮小、按住拖曳移動；放大會出現更多監視器。"
-      : "小技巧：點地圖上的點看詳細資料；兩指放大縮小、單指拖曳移動；放大會出現更多監視器。";
+      ? "小技巧：點地圖上的點看詳細資料；按住 Ctrl＋滾輪放大縮小、按住拖曳移動；左上角「回到全景」拉回整個花蓮。"
+      : "小技巧：點地圖上的點看詳細資料；兩指放大縮小、移動地圖（單指是捲動網頁）；左上角「回到全景」拉回整個花蓮。";
     $("yearsBox").hidden = !hasYears();
     $("sourceLine").hidden = app.region !== "hualien";
     document.querySelectorAll("#yearsSeg button").forEach((b) => setPressed(b, app.period.kind === "last" && Number(b.dataset.years) === app.period.n));
@@ -1113,7 +1213,10 @@
     }
     const det = $("rangeDet");
     det.hidden = app.region !== "hualien";
-    det.textContent = data.detError ? "AI 偵測：載入失敗" : `AI 偵測：即時（${data.detections.length.toLocaleString()} 筆）`;
+    const n = (s) => data.detections.filter((e) => e.source === s).length;
+    const staff = Roles.viewsFor(myRole()).includes("police");
+    const extra = staff ? [["測試", n("test")], ["模擬", n("sim")]].filter(([, c]) => c).map(([k, c]) => `${k} ${c.toLocaleString()}`) : [];
+    det.textContent = data.detError ? "AI 偵測：載入失敗" : `AI 偵測：真實 ${n("real").toLocaleString()} 筆${extra.length ? "（另有" + extra.join("、") + "）" : ""}`;
   }
 
   // 路線安全只在民眾畫面：其他畫面把路線收起來
@@ -1234,8 +1337,9 @@
     renderCards();
     renderPanels();
     renderControls();
+    renderSearchSummary();
     const empty = !(view.acc.length > 0 || view.det.length > 0);
-    $("emptyHint").hidden = !empty;
+    $("emptyHint").hidden = !empty || !!app.query; // 查路名查不到：搜尋框下方已經說明、給建議，地圖上不再蓋一層
     if (empty) {
       const why = [];
       if (app.query) why.push(`路名「${app.query}」`);
@@ -1246,10 +1350,121 @@
     }
   }
 
+  // ===== 顯示設定、簡易模式 =====
+  // 進簡易模式：藏起來的篩選回到預設（看不到的條件還開著會讓人搞不懂），地圖用斑點圖
+  function enterSimple() {
+    stopPlay(true);
+    closePopup();
+    app.accView = "spot";
+    if (!(app.period.kind === "last" && (app.period.n === 1 || app.period.n === 5))) app.period = defaultPeriod();
+    Object.assign(app, {
+      time: { mode: "all", period: null, hour: app.time.hour },
+      severities: new Set(["death", "injury"]),
+      weathers: new Set(),
+      types: new Set(),
+      village: "",
+      sources: new Set(DEFAULT_SOURCES),
+      selectedRoadKey: null,
+    });
+    if (!SIMPLE_TABS.includes(app.anaTab)) app.anaTab = "hour";
+  }
+  function onDisplayChange(s, key) {
+    if (key === "mode") {
+      if (s.mode === "simple") enterSimple();
+      else app.accView = loadAccView();
+    }
+    render();
+    setTimeout(() => map.invalidateSize(), 50); // 字變大、版面變了，地圖重新量大小
+  }
+  function bindSimpleBar() {
+    const go = {
+      search: () => {
+        $("searchInput").scrollIntoView({ behavior: "smooth", block: "center" });
+        $("searchInput").focus({ preventScroll: true });
+      },
+      route: () => {
+        $("routePanel").scrollIntoView({ behavior: "smooth", block: "start" });
+        const input = $("routeBody").querySelector("input");
+        if (input) input.focus({ preventScroll: true });
+      },
+      danger: () => $("rankPanel").scrollIntoView({ behavior: "smooth", block: "start" }),
+      cams: () => {
+        $("map").scrollIntoView({ behavior: "smooth", block: "center" });
+        closePopup();
+        // 帶到離目前地圖中心最近、有即時畫面的監視器（選了鄉鎮時畫面裡可能一支都沒有）
+        const c = map.getCenter();
+        const d2 = (cam) => (cam.lat - c.lat) ** 2 + (cam.lon - c.lng) ** 2;
+        const near = CAM.ALL.filter((cam) => CAM.streamUrl(cam)).sort((a, b) => d2(a) - d2(b))[0];
+        if (near) map.setView([near.lat, near.lon], Math.max(map.getZoom(), CAM.ALL_CAMS_ZOOM || 14));
+        showToast("點地圖上的攝影機圖示（方形、裡面有攝影機），就能看現在的路況", 6000);
+      },
+    };
+    let lastGo = 0; // 防連點：手抖連按時只算第一下，地圖才不會亂飛
+    document.querySelectorAll("#simpleBar button").forEach((b) => b.addEventListener("click", () => {
+      if (Date.now() - lastGo < 900) return;
+      lastGo = Date.now();
+      go[b.dataset.go]();
+    }));
+  }
+  // 回報問題時一起送的「目前畫面」
+  function pageText() {
+    const btn = document.querySelector(`#personaSeg [data-persona="${app.persona}"]`);
+    const parts = [btn ? btn.textContent.replace(/[●\s]/g, "") : app.persona, isSimple() ? "簡易模式" : "完整模式"];
+    if (app.region !== "hualien") parts.push(REGION_LABEL[app.region]);
+    if (app.town) parts.push(app.town);
+    if (app.query) parts.push(`查詢 ${app.query}`);
+    return parts.join("・").slice(0, 120);
+  }
+
+  // ===== 網址記住查詢條件（#q=中正路&town=花蓮市&view=heat）=====
+  function saveHash(push) {
+    const h = new URLSearchParams();
+    if (app.query) h.set("q", app.query);
+    if (app.query && app.roadPick) h.set("road", app.roadPick);
+    if (app.town) h.set("town", app.town);
+    if (app.region !== "hualien") h.set("region", app.region);
+    const s = h.toString();
+    const url = location.pathname + location.search + (s ? "#" + s : "");
+    if (url === location.pathname + location.search + location.hash) return;
+    try {
+      if (push) history.pushState(null, "", url);
+      else history.replaceState(null, "", url);
+    } catch (e) {
+      /* file:// 打開時有些瀏覽器不給改網址，不影響使用 */
+    }
+  }
+  function readHash() {
+    const h = new URLSearchParams(location.hash.replace(/^#/, ""));
+    return { q: R.normalizeQuery(h.get("q") || ""), road: (h.get("road") || "").slice(0, 40), town: h.get("town") || "", region: h.get("region") === "tainan" ? "tainan" : "hualien" };
+  }
+  async function applyHash() {
+    const s = readHash();
+    if (s.region !== app.region) {
+      $("regionSel").value = s.region;
+      await switchRegion(s.region);
+    }
+    if (!data.accidents[app.region]) return;
+    const towns = R.towns(data.accidents[app.region]);
+    app.town = towns.includes(s.town) ? s.town : "";
+    app.village = "";
+    app.query = s.q;
+    app.roadPick = s.q ? s.road : "";
+    app.selectedRoadKey = null;
+    $("townSel").value = app.town;
+    $("searchInput").value = app.query;
+    fillVillages();
+    render();
+    if (!view) return;
+    if (app.query) fitSearch(view.acc.concat(view.det));
+    else if (app.town) fitTo(view.acc.length ? view.acc : view.det, 14);
+    else fitDense();
+  }
+
   // ===== 互動 =====
   // 搜尋結果：同名的路可能在好幾個鄉鎮（例如中正路），飛到事故最多的那一條，再框它最密集的一段
   function fitSearch(points) {
-    if (!points.length) return showToast(R.noResultText(app.query, hasYears() ? periodText() : ""), 7000);
+    if (!points.length) return; // 查不到：地圖留在原地，搜尋框下方和查詢結果會說明
+
     const groups = new Map();
     points.forEach((p) => {
       const k = p.roadKey || "";
@@ -1261,7 +1476,85 @@
     const b = pts.length >= 20 ? R.denseBounds(pts) : null;
     if (b) map.fitBounds(b, { padding: [30, 30], maxZoom: 16 });
     else fitTo(pts, 16);
-    if (top && groups.size > 1) showToast(`有 ${groups.size} 條同名路段，先帶你看事故最多的：${top[0]}`);
+    // 同名路段有好幾條：地圖先帶到事故最多的那條，搜尋框下方與查詢結果會列出全部
+  }
+
+  // 查到的車禍依路段分組（同名的路在不同鄉鎮、不同段要分開，數字才跟排行對得上）
+  function searchGroups() {
+    if (!app.query || app.roadPick || !view) return [];
+    const m = new Map();
+    view.acc.forEach((e) => e.roadKey && m.set(e.roadKey, (m.get(e.roadKey) || 0) + 1));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ key, count }));
+  }
+  function suggestFor(q) {
+    return R.suggestRoads(q, (data.accidents[app.region] || []).map((e) => e.road));
+  }
+  // 點查詢結果裡的某一條路段：只看那一條；key 空字串＝回到全部同名路段
+  function pickSearchRoad(key) {
+    closePopup();
+    app.roadPick = key || "";
+    app.selectedRoadKey = null;
+    render();
+    saveHash(true);
+    if (view) fitSearch(view.acc.concat(view.det));
+    $("map").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // 搜尋框下方一句話：查到幾件、查不到怎麼辦（使用者測試：按查詢後看不出有沒有反應）
+  function renderSearchSummary() {
+    const box = $("searchSummary");
+    box.replaceChildren();
+    box.hidden = !app.query || !view;
+    if (box.hidden) return;
+    const label = hasYears() ? periodText() : "";
+    if (view.acc.length || view.det.length) {
+      const parts = [`${view.acc.length.toLocaleString()} 件車禍`];
+      if (view.det.length) parts.push(`${view.det.length.toLocaleString()} 筆 AI 偵測`);
+      box.className = "search-sum is-ok";
+      const groups = searchGroups();
+      if (app.roadPick) box.append(el("b", null, `「${app.roadPick}」`), `${label}${parts.join("、")}（跟路段排行同一個數字）。`);
+      else if (groups.length > 1) box.append(el("b", null, `「${app.query}」`), `有 ${groups.length} 條同名或相近的路段，${label}合計 ${parts.join("、")}。下方「查詢結果」可以選一條看。`);
+      else box.append(el("b", null, `「${app.query}」`), `${label}找到 ${parts.join("、")}，地圖已移到這條路。`);
+      return;
+    }
+    box.className = "search-sum is-none";
+    box.append(R.noResultText(app.query, label));
+    const sug = suggestFor(app.query);
+    if (sug.length) {
+      const line = el("span", "search-sum__sug", "你是不是要找：");
+      sug.forEach((name) => {
+        const b = el("button", "search-sum__btn", name);
+        b.type = "button";
+        b.addEventListener("click", () => runSearch(name));
+        line.append(b);
+      });
+      box.append(line);
+    }
+  }
+
+  function runSearch(text) {
+    stopPlay(true);
+    closePopup();
+    const q = R.normalizeQuery(text);
+    if (!q) { // 什麼都沒打：不查，提醒一聲
+      $("searchInput").value = "";
+      $("searchInput").focus();
+      const box = $("searchSummary");
+      box.hidden = false;
+      box.className = "search-sum is-none";
+      box.textContent = "請先輸入路名，例如：中山路、建國路、台9線。";
+      return;
+    }
+    app.query = q;
+    app.roadPick = "";
+    $("searchInput").value = app.query;
+    app.selectedRoadKey = null;
+    render();
+    saveHash(true);
+    if (!view) return; // 地區資料還在載入或載入失敗
+    fitSearch(view.acc.concat(view.det));
+    // 手機：地圖在搜尋框下面，捲到地圖讓人看到結果
+    if (window.innerWidth <= 860 && (view.acc.length || view.det.length)) $("map").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function fitTo(points, maxZoom) {
@@ -1275,8 +1568,9 @@
     const all = data.accidents[app.region] || [];
     const focus = FOCUS_TOWNS[app.region];
     const pts = focus ? all.filter((e) => focus.includes(e.town)) : [];
+    const narrow = map.getSize().x < 600; // 手機畫面小，拉遠一級才看得到整個市區
     if (pts.length) {
-      map.fitBounds(R.denseBounds(pts), { padding: [20, 20], maxZoom: 14 });
+      map.fitBounds(R.denseBounds(pts), { padding: [20, 20], maxZoom: narrow ? 13 : 14 });
       return;
     }
     const b = R.denseBounds(all);
@@ -1312,8 +1606,16 @@
   }
 
   function downloadCsv() {
-    if (!view || !view.roads.length) return;
+    if (!view) return;
     const now = new Date();
+    if (app.accView === "safety" || isSimple()) {
+      const rows = view.safety.filter((r) => r.score !== null);
+      if (!rows.length) return;
+      return saveCsv(RP.toSafetyCsv(rows, {
+        region: REGION_LABEL[app.region], town: app.town, period: hasYears() ? periodText() : "全部資料", time: timeText(), now,
+      }), RP.fileName(REGION_LABEL[app.region], now, "危險度"));
+    }
+    if (!view.roads.length) return;
     const csv = RP.toCsv(view.roads, {
       region: REGION_LABEL[app.region],
       town: app.town,
@@ -1323,10 +1625,14 @@
       minCount: app.minCount,
       now,
     });
+    saveCsv(csv, RP.fileName(REGION_LABEL[app.region], now));
+  }
+
+  function saveCsv(csv, name) {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = el("a");
     a.href = url;
-    a.download = RP.fileName(REGION_LABEL[app.region], now);
+    a.download = name;
     document.body.append(a);
     a.click();
     a.remove();
@@ -1348,11 +1654,14 @@
       kinds: new Set(F.KINDS),
       fill: "all",
       query: "",
+      roadPick: "",
       selectedRoadKey: null,
     });
     $("searchInput").value = "";
     fillVillages();
     render();
+    fitDense();
+    saveHash();
   }
 
   function pickRoad(key) {
@@ -1367,16 +1676,17 @@
     openPopup(ev.lat, ev.lon, detPopup(ev));
   }
 
-  function stopPlay() {
+  function stopPlay(quiet) {
     if (playTimer) {
       clearInterval(playTimer);
       playTimer = null;
+      if (!quiet) showToast("自動播放已暫停");
     }
   }
 
   function togglePlay() {
     if (playTimer) {
-      stopPlay();
+      stopPlay(true);
       renderControls();
       return;
     }
@@ -1385,8 +1695,9 @@
     app.time.mode = "hour";
     playTimer = setInterval(() => {
       if (app.time.hour >= 23) {
-        stopPlay();
+        stopPlay(true);
         renderControls();
+        showToast("24 小時播完了");
         return;
       }
       app.time.hour += 1;
@@ -1460,14 +1771,20 @@
       hideRegionMsg(); // 收掉前一次留下的「載入中…」或失敗訊息
       return true;
     }
-    showRegionMsg(`${REGION_LABEL[region]}車禍資料載入中…第一次打開大約要 5～10 秒，請稍等`, true);
+    const t0 = Date.now();
+    const tick = () => showRegionMsg(`${REGION_LABEL[region]}車禍資料下載中（${Math.round((Date.now() - t0) / 1000)} 秒）…第一次打開比較久，之後會快很多`, true);
+    tick();
+    const timer = setInterval(tick, 1000);
     try {
       data.accidents[region] = C.annotateAccidents(R.annotateAccidents(await window.HotData.loadAccidents(region), region));
       hideRegionMsg();
       return true;
     } catch (err) {
-      showRegionMsg(`${REGION_LABEL[region]}車禍資料載入失敗：${err.message}（可再選一次重試）`);
+      console.warn(err.message);
+      showRegionMsg(`${REGION_LABEL[region]}的車禍資料暫時下載不了，可能是網路不穩。請過一下再按瀏覽器的「重新整理」。`);
       return false;
+    } finally {
+      clearInterval(timer);
     }
   }
 
@@ -1480,6 +1797,7 @@
     app.town = "";
     app.village = "";
     app.query = "";
+    app.roadPick = "";
     app.selectedRoadKey = null;
     accLayer.setItems([]);
     roadLayer.clearLayers();
@@ -1517,13 +1835,17 @@
 
   function bindControls() {
     $("regionSel").addEventListener("change", (e) => switchRegion(e.target.value));
-    document.querySelectorAll("#accViewSeg button").forEach((b) =>
-      b.addEventListener("click", () => {
-        app.accView = b.dataset.accview;
-        saveAccView(app.accView);
-        render();
-      })
-    );
+    const setAccView = (v) => {
+      if (app.accView !== "safety") lastMapView = app.accView;
+      app.accView = v;
+      saveAccView(v);
+      render();
+    };
+    document.querySelectorAll("#accViewSeg button").forEach((b) => b.addEventListener("click", () => setAccView(b.dataset.accview)));
+    document.querySelectorAll("#rankTabs button").forEach((b) => b.addEventListener("click", () => {
+      const want = b.dataset.rank === "safety" ? "safety" : (app.accView === "safety" ? lastMapView : app.accView);
+      if (want !== app.accView) setAccView(want);
+    }));
     document.querySelectorAll("#personaSeg button").forEach((b) =>
       b.addEventListener("click", () => {
         stopPlay();
@@ -1578,6 +1900,7 @@
       app.selectedRoadKey = null;
       fillVillages();
       render();
+      saveHash(true);
       if (!view) return; // 地區資料還在載入或載入失敗
       const pts = view.acc.length ? view.acc : view.det;
       if (app.town) fitTo(pts, 14);
@@ -1598,16 +1921,14 @@
     });
     $("searchForm").addEventListener("submit", (e) => {
       e.preventDefault();
-      app.query = $("searchInput").value.trim();
-      app.selectedRoadKey = null;
-      render();
-      if (!view) return; // 地區資料還在載入或載入失敗
-      fitSearch(view.acc.concat(view.det));
+      runSearch($("searchInput").value);
     });
     $("searchClear").addEventListener("click", () => {
       app.query = "";
+      app.roadPick = "";
       $("searchInput").value = "";
       render();
+      saveHash(true);
     });
     $("resetBtn").addEventListener("click", resetFilters);
     $("emptyReset").addEventListener("click", resetFilters);
@@ -1634,7 +1955,7 @@
     });
     applyWeather();
     $("accViewHelp").addEventListener("click", () =>
-      showToast("斑點圖：一個點＝一件車禍，看得出每件事故的位置。熱度圖：把車禍多的地方畫成一片顏色，越紅＝越密集。安全指數：每條路段 0～100 分（越低越危險），依事故件數、嚴重程度、近一年趨勢計算，地圖下方有最危險前 10 名。", 10000));
+      showToast("斑點圖：一個點＝一件車禍，看得出每件事故的位置。熱度圖：把車禍多的地方畫成一片顏色，越紅＝越密集。安全指數：每條路段的危險度 0～100（越高越危險），依事故件數、嚴重程度、近一年趨勢計算，右邊排行有最危險前 10 名。", 10000));
     $("csvBtn").addEventListener("click", downloadCsv);
     $("aiBtn").addEventListener("click", runAiAnalysis);
     $("timeToggle").addEventListener("click", () => {
@@ -1645,6 +1966,12 @@
       app.filtersOpen = !app.filtersOpen;
       saveFoldOpen(app.filtersOpen);
       renderFold();
+    });
+    // 手機：時間、種類的篩選收在「更多篩選」裡，地圖才排得進第一個畫面
+    $("moreFilters").addEventListener("click", () => {
+      const open = document.querySelector(".controls").classList.toggle("is-more");
+      $("moreFilters").textContent = open ? "收起篩選 ▴" : "更多篩選（時間、種類）▾";
+      $("moreFilters").setAttribute("aria-expanded", String(open));
     });
   }
 
@@ -1754,6 +2081,10 @@
     writeCard = UI.writeCard.create($("writeCard"), focusDetection);
     aiDialog = UI.aiDialog.create($("aiDialog"));
     const tour = UI.tour.create($("tourDialog"), $("helpBtn"));
+    const settings = UI.settings.create($("settingsDialog"), $("settingsBtn"), onDisplayChange);
+    if (isSimple()) enterSimple();
+    bindSimpleBar();
+    UI.feedback.create($("feedbackDialog"), $("feedbackBtn"), pageText);
     routePanel = UI.routePanel.create($("routeBody"), {
       map,
       layer: routeLayer,
@@ -1811,8 +2142,12 @@
     if (ok) {
       render();
       fitDense();
+      if (location.hash.length > 1) await applyHash(); // 網址帶著查詢條件（分享、重新整理）
     }
-    tour.maybeOpen(); // 第一次來：資料載好後跳出使用說明
+    window.addEventListener("popstate", () => applyHash());
+    refreshAccuracy();
+    // 第一次來：先問「簡單看看／完整功能」，選完整功能再跳使用說明；簡易模式畫面本身就很直覺，不跳
+    if (!settings.maybeAsk((mode) => mode === "full" && tour.maybeOpen()) && !isSimple()) tour.maybeOpen();
     const saved = await sessionPromise; // 上次登入還沒登出：直接進該身分的畫面
     if (saved) await setSession(saved);
     window.HotData.subscribeEvents(onNewDetection, applyUpdate);
