@@ -23,6 +23,12 @@
     const shade = HotUI.SEV_SHADE[severity] || HotUI.SEV_SHADE.injury;
     return HotUI.isDay(hour) ? shade.day : shade.night;
   };
+  // 地圖不在畫面上才捲過去（電腦版地圖固定在左邊，一直看得到，就不用捲）
+  HotUI.showMap = function showMap(node) {
+    if (!node) return;
+    const r = node.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight + 2) node.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
   HotUI.TEXT_MUT = "#a2b0c0"; // 圖例「真實／模擬」示意用的中性色
   // 排行前三名：金、銀、銅（老師 11/9：前三名上色）；不用紅黃，避免跟死亡／受傷搞混
   HotUI.medalClass = (rank) => ["", " is-gold", " is-silver", " is-bronze"][rank] || "";

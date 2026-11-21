@@ -33,8 +33,7 @@
         o.value = lm.names[0];
         list.append(o);
       });
-      from.setAttribute("list", "routePlaces");
-      to.setAttribute("list", "routePlaces");
+      // 不掛下拉選單：下面已經有「常用地點」按鈕；掛了的話框裡是座標時選單會變成一串座標，看不懂
       const go = button("查路線", "search__go");
       const me = button("用我現在的位置當起點");
       const pick = button("在地圖上點選");
@@ -137,7 +136,10 @@
           const ol = UI.el("ol", "route__list");
           h.top.forEach((t) => {
             const b = button(`${t.name}（${t.count} 件${t.deaths ? `，死亡 ${t.deaths}` : ""}）`, "route__item");
-            b.addEventListener("click", () => ctx.map.setView([t.lat, t.lon], 17));
+            b.addEventListener("click", () => {
+              UI.showMap(ctx.map.getContainer()); // 清單在地圖下面：捲回地圖才看得到
+              ctx.map.setView([t.lat, t.lon], 17);
+            });
             const li = UI.el("li");
             li.append(b);
             ol.append(li);
@@ -151,6 +153,7 @@
           cams.slice(0, 8).forEach((c) => {
             const b = button(c.name, "route__item");
             b.addEventListener("click", () => {
+              UI.showMap(ctx.map.getContainer());
               ctx.map.setView([c.lat, c.lon], 16);
               ctx.openCam(c);
             });
@@ -214,7 +217,7 @@
         say("請在地圖上點起點");
         pick.textContent = "取消點選";
         ctx.map.getContainer().classList.add("is-picking");
-        ctx.map.getContainer().scrollIntoView({ behavior: "smooth", block: "center" }); // 路線面板在地圖右邊或下面，捲過去才點得到
+        UI.showMap(ctx.map.getContainer()); // 路線面板在地圖右邊或下面，捲過去才點得到
         pickHandler = (e) => {
           const p = { lat: e.latlng.lat, lon: e.latlng.lng };
           picked.push(p);

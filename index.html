@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=57237ac4">
+  <link rel="stylesheet" href="css/style.css?v=b66d4657">
   <script>
     // 顯示設定（簡易／字大小／風格）在畫面出來前先套上，才不會先閃一下預設樣式
     try { var ds = JSON.parse(localStorage.getItem("hotspot.display") || "null"); if (ds) ["mode", "font", "theme"].forEach(function (k) { if (typeof ds[k] === "string") document.documentElement.dataset[k] = ds[k]; }); } catch (e) {}
@@ -89,6 +89,12 @@
       </div>
     </div>
 
+    <nav class="simple-bar" id="simpleBar" aria-label="常用功能">
+        <button type="button" data-go="search"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>查一條路</span></button>
+        <button type="button" data-go="route"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg><span>查路線</span></button>
+        <button type="button" data-go="danger"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>看最危險的路</span></button>
+        <button type="button" data-go="cams"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span>看監視器</span></button>
+      </nav>
     <div class="fgroup fgroup--fold" id="kindGroup">
       <div class="fgroup__head">
         <h2 class="fgroup__title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>看哪種</h2>
@@ -142,12 +148,6 @@
 
   <main class="layout">
     <div class="map-col">
-      <nav class="simple-bar" id="simpleBar" aria-label="常用功能">
-        <button type="button" data-go="search"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>查一條路</span></button>
-        <button type="button" data-go="route"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg><span>查路線</span></button>
-        <button type="button" data-go="danger"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>看最危險的路</span></button>
-        <button type="button" data-go="cams"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span>看監視器</span></button>
-      </nav>
       <div class="map-head">
         <p class="map-hint" id="personaHint"></p>
         <p class="map-tip" id="mapTip"></p>
@@ -176,24 +176,16 @@
         <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
         <section class="wcard" id="writeCard" aria-live="polite" aria-label="新偵測事件寫入資料庫" hidden></section>
       </div>
+    </div>
+    <aside class="side">
+      <div class="cards">
+        <div class="card card--total"><span id="statTotalLabel">車禍件數</span><b id="statTotal">0</b><em class="card__delta" id="statDelta"></em></div>
+        <div class="card"><span id="statDeathsLabel">死亡人數</span><b id="statDeaths">0</b></div>
+        <div class="card"><span id="statInjuriesLabel">受傷人數</span><b id="statInjuries">0</b></div>
+      </div>
       <div class="panel" id="searchPanel" hidden>
         <h2 id="searchTitle">查詢路況</h2>
         <div id="searchBody"></div>
-      </div>
-      <section class="safety-panel" id="safetyPanel" hidden aria-label="道路安全指數排行"></section>
-      <div class="chart-box" id="analysisBox" hidden>
-        <h2>事故分析</h2>
-        <div class="ana-tabs" id="anaTabs" role="tablist" aria-label="切換分析圖">
-          <button type="button" data-tab="hour" role="tab">時段</button>
-          <button type="button" data-tab="week" role="tab">星期</button>
-          <button type="button" data-tab="year" role="tab">年度趨勢</button>
-          <button type="button" data-tab="town" role="tab">鄉鎮比較</button>
-          <button type="button" data-tab="cause" role="tab">肇因</button>
-          <button type="button" data-tab="type" role="tab">事故型態</button>
-        </div>
-        <p class="chart-box__lead" id="anaLead"></p>
-        <div class="chart-box__canvas" id="anaCanvasBox"><canvas id="anaChart"></canvas></div>
-        <p class="chart-box__note" id="anaNote"></p>
       </div>
       <div class="panel det-panel" id="detPanel" hidden>
         <div class="card acc-card" id="detAccuracy"></div>
@@ -206,13 +198,6 @@
           <ol class="det" id="detList"></ol>
           <button type="button" class="auth__btn det-more" id="detMore" hidden>顯示更多</button>
         </div>
-      </div>
-    </div>
-    <aside class="side">
-      <div class="cards">
-        <div class="card card--total"><span id="statTotalLabel">車禍件數</span><b id="statTotal">0</b><em class="card__delta" id="statDelta"></em></div>
-        <div class="card"><span id="statDeathsLabel">死亡人數</span><b id="statDeaths">0</b></div>
-        <div class="card"><span id="statInjuriesLabel">受傷人數</span><b id="statInjuries">0</b></div>
       </div>
       <div class="panel" id="rankPanel">
         <div class="panel__head">
@@ -244,6 +229,21 @@
       <div class="panel" id="routePanel" hidden>
         <h2>路線安全</h2>
         <div id="routeBody"></div>
+      </div>
+      <section class="safety-panel" id="safetyPanel" hidden aria-label="道路安全指數排行"></section>
+      <div class="chart-box" id="analysisBox" hidden>
+        <h2>事故分析</h2>
+        <div class="ana-tabs" id="anaTabs" role="tablist" aria-label="切換分析圖">
+          <button type="button" data-tab="hour" role="tab">時段</button>
+          <button type="button" data-tab="week" role="tab">星期</button>
+          <button type="button" data-tab="year" role="tab">年度趨勢</button>
+          <button type="button" data-tab="town" role="tab">鄉鎮比較</button>
+          <button type="button" data-tab="cause" role="tab">肇因</button>
+          <button type="button" data-tab="type" role="tab">事故型態</button>
+        </div>
+        <p class="chart-box__lead" id="anaLead"></p>
+        <div class="chart-box__canvas" id="anaCanvasBox"><canvas id="anaChart"></canvas></div>
+        <p class="chart-box__note" id="anaNote"></p>
       </div>
     </aside>
   </main>
@@ -278,14 +278,14 @@
   <script src="js/analysis.js?v=0ba2e3b5"></script>
   <script src="js/report.js?v=0c2c5c84"></script>
   <script src="js/categories.js?v=4ac81d98"></script>
-  <script src="js/personas.js?v=cc4bfe12"></script>
+  <script src="js/personas.js?v=baa6c0a4"></script>
   <script src="js/roles.js?v=dc9e3676"></script>
   <script src="js/cctv-list.js?v=0fc1b38e"></script>
   <script src="js/cctv-roads.js?v=e227588f"></script>
   <script src="js/cameras.js?v=dd2df110"></script>
   <script src="js/cache.js?v=68c050c3"></script>
   <script src="js/datasource.js?v=1c671fe8"></script>
-  <script src="js/ui/dom.js?v=3bbe77ca"></script>
+  <script src="js/ui/dom.js?v=be103c41"></script>
   <script src="js/ui/image-viewer.js?v=6a8a30bc"></script>
   <script src="js/ui/legend.js?v=ded0fb12"></script>
   <script src="js/ui/spot-layer.js?v=b2d0bb5a"></script>
@@ -298,7 +298,7 @@
   <script src="js/ui/fill-form.js?v=89452058"></script>
   <script src="js/ui/login.js?v=34089b34"></script>
   <script src="js/ui/write-card.js?v=04d70dea"></script>
-  <script src="js/ui/route-panel.js?v=520db64a"></script>
+  <script src="js/ui/route-panel.js?v=705439a0"></script>
   <script src="js/ui/ai-dialog.js?v=b52b4075"></script>
   <script src="js/ui/tour.js?v=b0cbc3f8"></script>
   <script src="js/ui/settings.js?v=f880824e"></script>
@@ -306,6 +306,6 @@
   <script src="js/ui/admin-view.js?v=250359ae"></script>
   <script src="js/detect-client.js?v=40c825a4"></script>
   <script src="js/ui/detect-console.js?v=d842bdb7"></script>
-  <script src="js/heatmap.js?v=aef80ce6"></script>
+  <script src="js/heatmap.js?v=75331869"></script>
 </body>
 </html>

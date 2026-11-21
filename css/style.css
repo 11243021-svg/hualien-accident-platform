@@ -324,7 +324,7 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
   .legend.is-open .legend__body { padding: 0 6px 6px; max-height: 45vh; overflow-y: auto; }
   .legend__title { display: none; }
 }
-@media (max-width: 600px) { html, body { overflow-x: hidden; } } /* 保險：不出現橫向捲軸 */
+@media (max-width: 600px) { html, body { overflow-x: clip; } } /* 保險：不出現橫向捲軸 */
 
 /* 員警登入區 */
 .auth { margin: 0 0 10px; }
@@ -896,7 +896,33 @@ html[data-mode="simple"] .panel__note, html[data-mode="simple"] .safety-panel__n
 .site-foot { padding: 12px 24px 80px; color: var(--text-mut); font-size: 0.85rem; line-height: 1.7; }
 .site-foot a { color: var(--accent); }
 .seg { flex-wrap: wrap; max-width: 100%; }
-html, body { overflow-x: hidden; }
+html, body { overflow-x: clip; }
 html[data-theme="light"] :is(.safety-item__score, .safety-lines b, .safety-big).is-danger { color: #6a1b9a; }
 html[data-theme="light"] :is(.safety-item__score, .safety-lines b, .safety-big).is-warn { color: #8e44ad; }
 html[data-theme="light"] :is(.safety-item__score, .safety-lines b, .safety-big).is-safe { color: #5b4a70; }
+
+/* 偵測事件清單：每格寬一點，地址不會被擠成一個字一行 */
+.det-panel .det { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+.det__addr { -webkit-line-clamp: 1; white-space: nowrap; text-overflow: ellipsis; display: block; min-width: 0; }
+html[data-mode="simple"] #regionSel { display: none !important; } /* 簡易模式不需要切台南，原生下拉選單在深色畫面也很突兀 */
+
+/* ===== 2026-11-22 版面：電腦版地圖固定在左邊，資料都在右邊捲動 ===== */
+@media (min-width: 861px) {
+  .layout { grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr); align-items: start; }
+  .map-col { position: sticky; top: 8px; }
+  #map { height: calc(100vh - 150px); min-height: 460px; }
+  .side .det-panel { grid-template-columns: 1fr; }
+  .side .det-panel .det { grid-template-columns: 1fr; max-height: 420px; }
+  .side .safety-list { grid-template-columns: 1fr; }
+}
+@media (min-width: 1500px) { .layout { grid-template-columns: minmax(0, 1.5fr) minmax(420px, 1fr); } }
+/* 四個大按鈕在上方篩選列（簡易模式） */
+html[data-mode="simple"] .controls .simple-bar { flex: 2 1 520px; margin: 0; align-self: stretch; }
+html[data-mode="simple"] #timeGroup { flex: 0 1 auto; }
+/* 顏色收斂：綠＝可以按、紅黃＝死亡受傷、紫＝危險度；金銀銅只留在名次圓圈 */
+.rank__item.is-gold .rank__btn, .rank__item.is-silver .rank__btn, .rank__item.is-bronze .rank__btn { border: 1px solid var(--line-2); }
+.safety-item.is-gold, .safety-item.is-silver, .safety-item.is-bronze { border: 1px solid var(--line-2) !important; }
+.rank__tier { display: none; } /* 名次旁的紫色小圓點沒有說明，拿掉 */
+.rank__btn { grid-template-columns: 1fr auto; }
+.rank__sub, .rank__spots { grid-column: 1 / -1; }
+.leaflet-marker-icon.cam-icon { position: absolute; } /* 一定要絕對定位：之前寫成 relative，每多一支監視器圖示就往下偏一點（監視器位置會跑掉） */

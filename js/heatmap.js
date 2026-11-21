@@ -77,6 +77,7 @@
   const FILL_CAUSES_N = 15; // 補填肇因下拉列出歷史資料最常見的幾項
 
   const $ = (id) => document.getElementById(id);
+  const HOVER = window.matchMedia && window.matchMedia("(hover: hover)").matches; // 有滑鼠（電腦）
   const isSimple = () => document.documentElement.dataset.mode === "simple";
   const SIMPLE_TABS = ["hour", "week"]; // 簡易模式的事故分析只留時段、星期
   const persona = () => P.PERSONAS[app.persona];
@@ -206,8 +207,10 @@
   // ===== 地圖 =====
   function initMap() {
     // 地圖不亂跑：電腦要按住 Ctrl 才用滾輪縮放、手機要兩指才移動，單指照常捲頁面（使用者測試 11/18）
-    const gesture = !!window.leafletGestureHandling; // 手勢套件沒載到（例如沒網路）就照舊
-    map = L.map("map", Object.assign({ preferCanvas: true, maxZoom: 18 }, gesture ? {
+    // 手機、平板（沒有滑鼠）才用手勢套件：單指捲頁面、兩指移地圖。
+    // 電腦一律可以直接拖曳；滾輪要先點一下地圖才會縮放（捲網頁時地圖不會突然放大縮小），滑鼠移出地圖就恢復
+    const gesture = !!window.leafletGestureHandling && !HOVER;
+    map = L.map("map", Object.assign({ preferCanvas: true, maxZoom: 18, scrollWheelZoom: !HOVER }, gesture ? {
       gestureHandling: true,
       gestureHandlingOptions: { text: { touch: "用兩指移動地圖", scroll: "按住 Ctrl＋滾輪縮放地圖", scrollMac: "按住 ⌘＋滾輪縮放地圖" }, duration: 1200 },
     } : {}));
@@ -224,6 +227,10 @@
       return b;
     };
     home.addTo(map);
+    if (HOVER) {
+      map.on("click focus", () => map.scrollWheelZoom.enable());
+      map.getContainer().addEventListener("mouseleave", () => map.scrollWheelZoom.disable());
+    }
     // Esri 深灰底圖（免金鑰，雙擊 file:// 打開也不會被擋）
     const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
     const tiles = L.tileLayer(ESRI + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
@@ -267,7 +274,7 @@
     roadLayer = L.layerGroup().addTo(map);
     detLayer = L.layerGroup().addTo(map);
     cameraLayer = UI.cameras.create(map, openPopup, {
-      canDetect: () => Roles.viewsFor(myRole()).includes("detect"),
+      canDetect: () => app.persona === "police" && Roles.viewsFor(myRole()).includes("detect"),
       onDetect: (cam) => openDetect(cam),
     });
     legend = UI.legend.create(map);
@@ -593,7 +600,6 @@
   }
 
   // 斑點圖的點不是 Leaflet 物件：點擊、滑鼠移過時由地圖找最近的點
-  const HOVER = window.matchMedia && window.matchMedia("(hover: hover)").matches;
   function bindSpotEvents() {
     let spotTip = null;
     let pending = null;
@@ -722,7 +728,7 @@
       b.addEventListener("click", () => {
         map.setView([r.lat, r.lon], Math.max(map.getZoom(), 15));
         openPopup(r.lat, r.lon, safetyPopup(r));
-        $("map").scrollIntoView({ behavior: "smooth", block: "center" });
+        UI.showMap($("map"));
       });
       const li = el("li");
       li.append(b);
@@ -905,13 +911,15 @@
   }
 
   // ===== 事故分析：一個框、六個分頁（老師 11/9：管理單位和民眾關心的數據做成圖）=====
-  let ANA_TEAL = "#48c3ac", ANA_TOP = "#f2f6fa", ANA_GOLD = "#f5c518"; // 紅色只留給「死亡」；「最多」用跟文字同色
+  let ANA_TEAL = "#48c3ac", ANA_TOP = "#f5c518", ANA_SEL = "#f2f6fa"; // 紅色只留給「死亡」；前幾名用金色（跟排行金牌同一個意思），選中的鄉鎮用白色
   const TICK = { color: "#a2b0c0" };
   const GRID = { color: "rgba(255,255,255,0.08)" };
   const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   // 圖表顏色跟著畫面風格（深色／淺色／高對比）
   function themeCharts() {
-    ANA_TOP = cssVar("--text") || "#f2f6fa";
+    const light = document.documentElement.dataset.theme === "light";
+    ANA_TOP = light ? "#b7860b" : "#f5c518";
+    ANA_SEL = cssVar("--text") || "#f2f6fa";
     ANA_TEAL = cssVar("--accent") || "#48c3ac";
     TICK.color = cssVar("--text-mut") || "#a2b0c0";
     GRID.color = document.documentElement.dataset.theme === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.08)";
@@ -942,7 +950,7 @@
         if (top.includes(h)) return on ? ANA_TOP : "rgba(150,160,175,0.35)";
         return on ? ANA_TEAL : "rgba(72,195,172,0.22)";
       });
-      const topWord = document.documentElement.dataset.theme === "light" ? "深色" : "白色";
+      const topWord = "金色";
       if (app.time.mode !== "all") { // 選了時段：結論講選到的時段，圖仍顯示全天方便比較
         const inSel = hours.map((n, h) => (F.isHourHighlighted(h, app.time) ? n : 0));
         const total = inSel.reduce((s, n) => s + n, 0);
@@ -957,7 +965,7 @@
     if (tab === "week") {
       const c = AN.weekdayCounts(view.acc);
       const top = AN.topIndexes(c, 1);
-      return { lead: AN.weekdayText(c), note: `${document.documentElement.dataset.theme === "light" ? "深色" : "白色"}＝最多的一天`, config: barChart(AN.WEEKDAYS.map((d) => "週" + d), c, c.map((_, i) => (top.includes(i) ? ANA_TOP : ANA_TEAL))) };
+      return { lead: AN.weekdayText(c), note: "金色＝最多的一天", config: barChart(AN.WEEKDAYS.map((d) => "週" + d), c, c.map((_, i) => (top.includes(i) ? ANA_TOP : ANA_TEAL))) };
     }
     if (tab === "year") {
       const rows = AN.yearlyStats(view.yearBase);
@@ -985,26 +993,26 @@
       const rows = AN.townCounts(view.townBase);
       return {
         lead: AN.townText(rows, app.town),
-        note: app.town ? `固定比較全部鄉鎮；金色＝目前選的「${app.town}」` : "固定比較全部鄉鎮；上方選了鄉鎮，那一條會變金色",
+        note: "固定比較全部鄉鎮；金色＝前 3 名" + (app.town ? `；白色＝目前選的「${app.town}」` : "；上方選了鄉鎮，那一條會變白色"),
         tall: true,
-        config: barChart(rows.map((r) => r.town), rows.map((r) => r.count), rows.map((r) => (r.town === app.town ? ANA_GOLD : ANA_TEAL)), true),
+        config: barChart(rows.map((r) => r.town), rows.map((r) => r.count), rows.map((r, i) => (r.town === app.town ? ANA_SEL : i < 3 ? ANA_TOP : ANA_TEAL)), true),
       };
     }
     if (tab === "cause") {
       const r = A.topCauses(view.acc, 10);
       return {
         lead: r.top.length ? `最常見的原因是「${r.top[0].cause}」（${r.top[0].count.toLocaleString()} 件）。` : "",
-        note: r.unknown ? `另有 ${r.unknown.toLocaleString()} 件未提供肇因（110 年官方資料無此欄位）` : "",
+        note: "金色＝前 3 名" + (r.unknown ? `；另有 ${r.unknown.toLocaleString()} 件未提供肇因（110 年官方資料無此欄位）` : ""),
         tall: true,
-        config: barChart(r.top.map((x) => x.cause), r.top.map((x) => x.count), ANA_TEAL, true),
+        config: barChart(r.top.map((x) => x.cause), r.top.map((x) => x.count), r.top.map((_, i) => (i < 3 ? ANA_TOP : ANA_TEAL)), true),
       };
     }
     const r = AN.typeCounts(view.acc); // 事故型態
     return {
       lead: AN.typeText(r),
-      note: r.unknown ? `另有 ${r.unknown.toLocaleString()} 件未提供事故型態（110 年官方資料無此欄位）` : "",
+      note: "金色＝前 3 名" + (r.unknown ? `；另有 ${r.unknown.toLocaleString()} 件未提供事故型態（110 年官方資料無此欄位）` : ""),
       tall: true,
-      config: barChart(r.rows.map((x) => x.type), r.rows.map((x) => x.count), ANA_TEAL, true),
+      config: barChart(r.rows.map((x) => x.type), r.rows.map((x) => x.count), r.rows.map((_, i) => (i < 3 ? ANA_TOP : ANA_TEAL)), true),
     };
   }
 
@@ -1039,7 +1047,7 @@
     renderTimeFold();
     $("regionNote").hidden = app.region !== "tainan";
     $("mapTip").textContent = HOVER
-      ? "小技巧：點地圖上的點看詳細資料；按住 Ctrl＋滾輪放大縮小、按住拖曳移動；左上角「回到全景」拉回整個花蓮。"
+      ? "小技巧：點地圖上的點看詳細資料；按住拖曳移動；先點一下地圖，滾輪就能放大縮小；左上角「回到全景」拉回整個花蓮。"
       : "小技巧：點地圖上的點看詳細資料；兩指放大縮小、移動地圖（單指是捲動網頁）；左上角「回到全景」拉回整個花蓮。";
     $("yearsBox").hidden = !hasYears();
     $("sourceLine").hidden = app.region !== "hualien";
@@ -1214,7 +1222,7 @@
     const det = $("rangeDet");
     det.hidden = app.region !== "hualien";
     const n = (s) => data.detections.filter((e) => e.source === s).length;
-    const staff = Roles.viewsFor(myRole()).includes("police");
+    const staff = app.persona === "police";
     const extra = staff ? [["測試", n("test")], ["模擬", n("sim")]].filter(([, c]) => c).map(([k, c]) => `${k} ${c.toLocaleString()}`) : [];
     det.textContent = data.detError ? "AI 偵測：載入失敗" : `AI 偵測：真實 ${n("real").toLocaleString()} 筆${extra.length ? "（另有" + extra.join("、") + "）" : ""}`;
   }
@@ -1335,6 +1343,7 @@
     weatherLayer.setVisible($("weatherToggle").checked && app.region === "hualien");
     document.querySelectorAll("#accViewSeg button").forEach((b) => setPressed(b, b.dataset.accview === app.accView));
     renderCards();
+    renderRange();
     renderPanels();
     renderControls();
     renderSearchSummary();
@@ -1389,7 +1398,7 @@
       },
       danger: () => $("rankPanel").scrollIntoView({ behavior: "smooth", block: "start" }),
       cams: () => {
-        $("map").scrollIntoView({ behavior: "smooth", block: "center" });
+        UI.showMap($("map"));
         closePopup();
         // 帶到離目前地圖中心最近、有即時畫面的監視器（選了鄉鎮時畫面裡可能一支都沒有）
         const c = map.getCenter();
@@ -1497,7 +1506,7 @@
     render();
     saveHash(true);
     if (view) fitSearch(view.acc.concat(view.det));
-    $("map").scrollIntoView({ behavior: "smooth", block: "center" });
+    UI.showMap($("map"));
   }
 
   // 搜尋框下方一句話：查到幾件、查不到怎麼辦（使用者測試：按查詢後看不出有沒有反應）
@@ -1554,7 +1563,7 @@
     if (!view) return; // 地區資料還在載入或載入失敗
     fitSearch(view.acc.concat(view.det));
     // 手機：地圖在搜尋框下面，捲到地圖讓人看到結果
-    if (window.innerWidth <= 860 && (view.acc.length || view.det.length)) $("map").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (window.innerWidth <= 860 && (view.acc.length || view.det.length)) UI.showMap($("map"));
   }
 
   function fitTo(points, maxZoom) {
@@ -1672,6 +1681,7 @@
   }
 
   function focusDetection(ev) {
+    UI.showMap($("map")); // 清單在地圖下方：捲回地圖，小卡片才看得到、可以直接判斷
     map.setView([ev.lat, ev.lon], 16);
     openPopup(ev.lat, ev.lon, detPopup(ev));
   }

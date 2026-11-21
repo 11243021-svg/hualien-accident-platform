@@ -5,7 +5,7 @@
       label: "公路局（路況管理）",
       hint: "交通部公路局東區養護工程分局：找出轄區最常出事的路段與路口，作為道路改善的依據",
       filters: "mayorFilters",
-      panels: ["rankPanel", "analysisBox"],
+      panels: ["rankPanel", "routePanel", "analysisBox"], // 路線安全：看主要道路沿線哪裡最危險
       layers: { roads: true, detections: true, cameras: "live" }, // 也看 AI 偵測點跟歷史車禍比較；可點公路局監視器看即時路況
       showConfidence: false,
     },
@@ -13,7 +13,7 @@
       label: "交通警察隊",
       hint: "花蓮縣警察局交通警察隊：查看 AI 偵測到的事故，登入後在小卡片裡補填傷亡、肇因與事故型態",
       filters: "policeFilters",
-      panels: ["detPanel", "analysisBox"],
+      panels: ["detPanel", "routePanel", "analysisBox"], // 路線安全：規劃巡邏路線時看沿線熱點
       layers: { roads: false, detections: true, cameras: "all" }, // 含情境模擬攝影機
       showConfidence: true,
     },
